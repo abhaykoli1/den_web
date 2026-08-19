@@ -185,9 +185,9 @@ export function AdminDashboardScreen() {
   const collected = asNum(dc?.collected)
   const netToday = asNum(dc?.net)
   const expToday = asNum((dc?.expenses as Record<string, unknown> | undefined)?.total)
-  const framesToday = asNum((dc?.frames as Record<string, unknown> | undefined)?.count)
+  // const framesToday = asNum((dc?.frames as Record<string, unknown> | undefined)?.count)
   const totalDue = stats?.totalDue ?? 0
-  const runningSessions = stats?.runningSessions ?? 0
+  // const runningSessions = stats?.runningSessions ?? 0
 
   const daily = asArray<Record<string, unknown>>(mon?.daily)
   const rows14: DayRow[] = useMemo(() => {
