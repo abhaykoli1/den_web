@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Activity,
+  // Activity,
   BarChart3,
   ClipboardCheck,
   History,
@@ -9,7 +9,7 @@ import {
   Receipt,
   ReceiptText,
   Scale,
-  UserCog,
+  // UserCog,
   type LucideIcon,
 } from 'lucide-react'
 import { api, asArray, asNum } from '../lib/api'
