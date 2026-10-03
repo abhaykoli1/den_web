@@ -59,7 +59,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       if (!opts?.silent) setRefreshing(true)
       try {
         const raw = await api(`/clubs/${clubId}/data`)
-        setData(normClubData(raw))
+        const norm = normClubData(raw)
+        setData(norm)
+        // Keep the clubs list in sync with the freshly loaded club document
+        // (name, logo, qrCode, settings.isOpen) — den_app does the same after
+        // every PATCH /clubs/{id}/settings.
+        if (norm.club?.id) {
+          setClubs((list) => list.map((c) => (c.id === norm.club.id ? { ...c, ...norm.club } : c)))
+        }
         setError(null)
       } catch (e) {
         const msg = e instanceof ApiError ? e.message : 'Failed to load club data'

@@ -1,9 +1,16 @@
+import { useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { hasAppAccess, useAuth } from './context/AuthContext'
 import { ClubProvider } from './context/ClubContext'
 import Layout from './components/Layout'
 import LoginScreen from './components/LoginScreen'
 import SubscriptionOnboardingScreen from './components/SubscriptionOnboardingScreen'
+import HomeScreen from './components/HomeScreen'
+import BookingsScreen from './components/BookingsScreen'
+import OrdersScreen from './components/OrdersScreen'
+import StockScreen from './components/StockScreen'
+import OnboardingScreen, { onboardingSeen } from './components/OnboardingScreen'
+import SplashScreen from './components/SplashScreen'
 import TablesScreen from './components/TablesScreen'
 import PlayersScreen from './components/PlayersScreen'
 import DueDeskScreen from './components/DueDeskScreen'
@@ -23,7 +30,7 @@ import SupportScreen from './components/SupportScreen'
 import PrivacyScreen from './components/PrivacyScreen'
 import TermsScreen from './components/TermsScreen'
 import MasterAdminScreen from './components/MasterAdminScreen'
-import { Card, EmptyState, FullLoader } from './components/ui'
+import { Card, EmptyState } from './components/ui'
 import ErrorBoundary from './components/ErrorBoundary'
 
 /** Staff accounts never see the money-admin surfaces — bounce them home. */
@@ -44,8 +51,12 @@ function AdminOnly({ children }: { children: JSX.Element }) {
 
 export default function App() {
   const { status, user } = useAuth()
+  // den_app main.dart routing parity: splash → onboarding → login →
+  // subscription wall → shell.
+  const [introDone, setIntroDone] = useState(() => onboardingSeen())
 
-  if (status === 'loading') return <FullLoader label="Restoring session…" />
+  if (status === 'loading') return <SplashScreen />
+  if (!user && !introDone) return <OnboardingScreen onDone={() => setIntroDone(true)} />
   if (!user) return <LoginScreen />
   if (!hasAppAccess(user)) return <SubscriptionOnboardingScreen />
 
@@ -53,11 +64,15 @@ export default function App() {
     <ClubProvider>
       <Routes>
         <Route element={<Layout />}>
+          <Route path="/home" element={<ErrorBoundary label="Home"><HomeScreen /></ErrorBoundary>} />
           <Route path="/tables" element={ <ErrorBoundary label="Tables"> <TablesScreen /></ErrorBoundary>} />
+          <Route path="/bookings" element={<ErrorBoundary label="Bookings"><BookingsScreen /></ErrorBoundary>} />
+          <Route path="/orders" element={<ErrorBoundary label="Orders"><OrdersScreen /></ErrorBoundary>} />
           <Route path="/players" element={<PlayersScreen />} />
           <Route path="/due-desk" element={<DueDeskScreen />} />
           <Route path="/items" element={<ErrorBoundary label="Items"><ItemsScreen /></ErrorBoundary>} />
           {/* <Route path="/items" element={<ItemsScreen />} /> */}
+          <Route path="/stock" element={<ErrorBoundary label="Stock"><StockScreen /></ErrorBoundary>} />
           <Route path="/item-bills" element={<ItemBillsScreen />} />
           <Route path="/frames" element={<FramesScreen />} />
           <Route path="/logs" element={<LogsScreen />} />
@@ -74,7 +89,7 @@ export default function App() {
           <Route path="/privacy" element={<PrivacyScreen />} />
           <Route path="/terms" element={<TermsScreen />} />
           <Route path="/master" element={<MasterAdminScreen />} />
-          <Route path="*" element={<Navigate to="/tables" replace />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
       </Routes>
     </ClubProvider>

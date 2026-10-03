@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { Download, FileJson, ImagePlus, Pencil, Plus, Power, Trash2, X } from 'lucide-react'
+import { Download, FileJson, ImagePlus, Moon, Pencil, Plus, Power, Sun, Trash2, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useClub } from '../context/ClubContext'
+import { useTheme } from '../context/ThemeContext'
 import { useToast } from '../context/ToastContext'
 import { dateStamp, downloadJson } from '../lib/csv'
 import { downloadXlsx, xlsxName, type SheetDef, type SheetRow } from '../lib/xlsx'
@@ -376,8 +377,12 @@ export default function SettingsScreen() {
   const [defaultAdvance, setDefaultAdvance] = useState(String(club?.settings.defaultAdvance ?? 0))
   const [monthlyPct, setMonthlyPct] = useState(String(club?.settings.monthlyTableDiscount ?? 0))
   const [logo, setLogo] = useState<string | null | undefined>(undefined) // undefined = unchanged
+  // den_app parity — Club.qrCode (counter payment QR) + settings.isOpen
+  const [qrCode, setQrCode] = useState<string | null | undefined>(undefined)
   const [savingClub, setSavingClub] = useState(false)
+  const [togglingOpen, setTogglingOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const qrRef = useRef<HTMLInputElement>(null)
 
   const [tableModal, setTableModal] = useState<{ table: ClubTable | null } | null>(null)
   const [planModal, setPlanModal] = useState<{ plan: MembershipPlan | null } | null>(null)
@@ -388,19 +393,19 @@ export default function SettingsScreen() {
   // Logos are downscaled in-browser (canvas) so the save call stays tiny —
   // a huge base64 body used to be rejected by the proxy and looked like a
   // phantom "Authentication required" to the user.
-  const pickLogo = (file: File | undefined) => {
+  const pickImage = (file: File | undefined, max: number, onReady: (dataUrl: string) => void, what = 'Logo') => {
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      toast.error('Logo must be an image (png, jpg, webp, gif)')
+      toast.error(`${what} must be an image (png, jpg, webp, gif)`)
       return
     }
     if (file.size > 8 * 1024 * 1024) {
-      toast.error('Logo image is too large (max 8 MB — it gets auto-compressed)')
+      toast.error(`${what} image is too large (max 8 MB — it gets auto-compressed)`)
       return
     }
     const img = new Image()
     img.onload = () => {
-      const MAX = 420
+      const MAX = max
       const scale = Math.min(1, MAX / Math.max(img.width, img.height))
       const w = Math.max(1, Math.round(img.width * scale))
       const h = Math.max(1, Math.round(img.height * scale))
@@ -412,13 +417,29 @@ export default function SettingsScreen() {
       ctx.drawImage(img, 0, 0, w, h)
       const out = canvas.toDataURL('image/png')
       URL.revokeObjectURL(img.src)
-      setLogo(out)
+      onReady(out)
     }
     img.onerror = () => {
       URL.revokeObjectURL(img.src)
       toast.error('Could not read that image')
     }
     img.src = URL.createObjectURL(file)
+  }
+
+  const pickLogo = (file: File | undefined) => pickImage(file, 420, setLogo, 'Logo')
+  const pickQr = (file: File | undefined) => pickImage(file, 640, setQrCode, 'QR code')
+
+  /** Club open / closed — den_app _ClubStatusSwitch (PATCH settings.isOpen). */
+  const isOpen = club?.settings?.isOpen !== false
+  const toggleOpen = async () => {
+    if (!club || togglingOpen) return
+    setTogglingOpen(true)
+    await mutate('settings', {
+      method: 'PATCH',
+      body: { isOpen: !isOpen },
+      toast: !isOpen ? 'Club is now OPEN' : 'Club marked CLOSED',
+    })
+    setTogglingOpen(false)
   }
 
   const saveClub = async () => {
@@ -430,11 +451,12 @@ export default function SettingsScreen() {
     setSavingClub(true)
     // Name/logo PATCH fires only when actually changed — and the billing
     // settings PATCH never waits on it (a failed photo save must not block the numbers).
-    const metaChanged = name.trim() !== club.name || logo !== undefined
+    const metaChanged = name.trim() !== club.name || logo !== undefined || qrCode !== undefined
     let ok1: unknown = true
     if (metaChanged) {
       const body: Record<string, unknown> = { name: name.trim() || club.name }
       if (logo !== undefined) body.logo = logo ?? ''
+      if (qrCode !== undefined) body.qrCode = qrCode ?? ''
       ok1 = await mutate('', { method: 'PATCH', body, toast: 'Club profile updated' })
     }
     const ok2 = await mutate('settings', {
@@ -448,7 +470,10 @@ export default function SettingsScreen() {
       toast: 'Club billing settings saved',
     })
     setSavingClub(false)
-    if (ok1 && ok2) setLogo(undefined)
+    if (ok1 && ok2) {
+      setLogo(undefined)
+      setQrCode(undefined)
+    }
   }
 
   const toggleTable = async (t: ClubTable) => {
@@ -475,6 +500,7 @@ export default function SettingsScreen() {
   const tables = data?.tables ?? []
   const plans = data?.plans ?? []
   const previewLogo = logo !== undefined ? logo : club?.logo ?? null
+  const previewQr = qrCode !== undefined ? qrCode : club?.qrCode ?? null
 
   return (
     <div className="stack settings-grid" style={{ marginTop: 10 }}>
@@ -482,9 +508,26 @@ export default function SettingsScreen() {
         {/* ---------------------------------------------------- My profile (login account) */}
         <ProfileCard />
 
+        {/* ------------------------------------- Appearance (den_app settings parity) */}
+        <AppearanceCard />
+
         {/* ---------------------------------------------------- Club settings */}
         <Card>
-          <div style={{ marginBottom: 10 }} className="section-title">Club Settings</div>
+          <div className="section-head">
+            <div className="section-title">Club Settings</div>
+            {/* den_app HomeOverview ka club OPEN/CLOSED switch */}
+            <span className="club-switch-toggle">
+              <span className={`cs-label ${isOpen ? 'cs-open' : 'cs-closed'}`}>{isOpen ? 'OPEN' : 'CLOSED'}</span>
+              <button
+                type="button"
+                className={`switch${isOpen ? ' on' : ''}`}
+                disabled={togglingOpen}
+                onClick={() => void toggleOpen()}
+                aria-pressed={isOpen}
+                aria-label={isOpen ? 'Club open. Switch to close club.' : 'Club closed. Switch to open club.'}
+              />
+            </span>
+          </div>
         <div className="logo-row">
           <div className="logo-preview">
             {previewLogo ? (
@@ -510,6 +553,31 @@ export default function SettingsScreen() {
               </Btn>
             )}
             <span className="muted small">PNG/JPG/WebP · auto-compressed to 420px</span>
+          </div>
+        </div>
+
+        {/* ---- payment QR (den_app shell.dart → _showQrCode / topbar QR) ---- */}
+        <div className="logo-row">
+          <div className="logo-preview">
+            {previewQr ? <img src={previewQr} alt="Payment QR" /> : <span className="logo-empty">QR</span>}
+          </div>
+          <div className="stack-xs">
+            <input
+              ref={qrRef}
+              type="file"
+              accept="image/*"
+              className="hidden-file"
+              onChange={(e) => pickQr(e.target.files?.[0])}
+            />
+            <Btn size="sm" variant="outline" onClick={() => qrRef.current?.click()}>
+              <ImagePlus size={12} /> Upload Payment QR
+            </Btn>
+            {previewQr && (
+              <Btn size="sm" variant="ghost" className="danger-text" onClick={() => setQrCode(null)}>
+                <X size={12} /> Remove QR
+              </Btn>
+            )}
+            <span className="muted small">Topbar ke QR button se counter pe turant dikh jata hai</span>
           </div>
         </div>
           <div className="form-grid two">
@@ -621,5 +689,43 @@ export default function SettingsScreen() {
       <ConfirmModal open={!!delPlan} onClose={() => setDelPlan(null)} onConfirm={doDeletePlan} busy={delBusy} title="Delete plan"
         message={delPlan ? `Delete plan ${delPlan.name}? Plans assigned to active members cannot be deleted.` : ''} />
     </div>
+  )
+}
+
+
+/** Appearance — den_app settings_screen.dart: theme toggle + text size (0.85–1.25). */
+function AppearanceCard() {
+  const { theme, toggle, textScale, setTextScale } = useTheme()
+  return (
+    <Card>
+      <div className="section-head">
+        <div className="section-title">Appearance</div>
+        <Badge kind={theme === 'dark' ? 'dark' : 'muted'}>{theme === 'dark' ? 'Dark' : 'Light'}</Badge>
+      </div>
+      <div className="row wrap" style={{ alignItems: 'center', gap: 8 }}>
+        <Btn size="sm" variant="outline" onClick={toggle}>
+          {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />} {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+        </Btn>
+        <span className="muted small">Light is the product default (app jaisa); dark raat ke liye.</span>
+      </div>
+      <div className="field" style={{ marginTop: 10 }}>
+        <span className="field-label">Text size · {Math.round(textScale * 100)}%</span>
+        <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+          <input
+            type="range"
+            min={0.85}
+            max={1.25}
+            step={0.05}
+            value={textScale}
+            onChange={(e) => setTextScale(Number(e.target.value))}
+            style={{ flex: 1, accentColor: 'var(--primary)' }}
+            aria-label="Text size"
+          />
+          <Btn size="sm" variant="ghost" disabled={textScale === 1} onClick={() => setTextScale(1)}>
+            Reset
+          </Btn>
+        </div>
+      </div>
+    </Card>
   )
 }

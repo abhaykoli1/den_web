@@ -99,6 +99,65 @@ logic over live API data — no external AI keys.
 The client only **estimates** bills — FastAPI computes the authoritative
 result; every mutation toasts success/error and refreshes club data.
 
+## ✦ den_app parity (Flutter companion → web)
+
+This frontend now mirrors the Flutter app (`den_app`) design system and
+feature set, while keeping the web's sidebar navigation.
+
+**Design system** — `src/styles/global.css` tokens are a 1:1 port of
+`den_app/lib/src/theme.dart` (AppColors) + `dimensions.dart` (Dimens):
+
+| App token | Web variable |
+|---|---|
+| `AppColors.light` (bg `#FFFFFF`, muted `#F4F4F6`, border `#E9E9EE`, text `#131316`) | `:root` / `[data-theme='light']` |
+| `AppColors.dark` (bg `#0C0C0E`, elevated `#141416`, text `#F5F5F7`) | `[data-theme='dark']` |
+| `primary` `#1C9050` / `#2BAC65`, green/red/gold/blue accents | `--primary`, `--accent-*` |
+| `Dimens.radiusCard 14` · `radiusField 10` · buttons `8` | `--radius-card`, `--radius-sm`, `--radius-btn` |
+| `Dimens.buttonH/ctaH/fieldH/searchH`, `btnFont/controlFont/fieldFont` | `--h-btn*`, `--h-field`, `--font-*` |
+| `fontFamily: 'Avenir Next'` | `--font` |
+
+Light is the **product default** (as in the app); dark is one tap away.
+Cards are borderless-ish with a soft floating shadow, StatTiles carry the
+4px tone rail, segmented buttons fill with `--primary`, inputs focus with a
+1.4px primary border — all exactly like the app.
+
+**Screens ported from the app**
+
+| den_app source | Web route / file |
+|---|---|
+| `workspace_hubs.dart` → `HomeOverview`, `_ClubStatusSwitch`, `_Action` | `/home` — `components/HomeScreen.tsx` (greeting, club OPEN/CLOSED switch, "Today's pulse" hero, 4 stat tiles, 8 quick actions) |
+| `bookings_screen.dart` | `/bookings` — `components/BookingsScreen.tsx` (`GET/DELETE /clubs/{id}/bookings`) |
+| `orders_screen.dart` | `/orders` — `components/OrdersScreen.tsx` (`GET /clubs/{id}/orders`, search + status filter) |
+| `items_screen.dart` → `StockScreen` | `/stock` — `components/StockScreen.tsx` (item master w/ photo, restock→expense, reorder triage, stock valuation) |
+| `onboarding_screen.dart` | `components/OnboardingScreen.tsx` — 6-slide first-run intro before login |
+| `main.dart` → `BrandSplashScreen` | `components/SplashScreen.tsx` — black splash while the session restores |
+| `workspace_hubs.dart` → `ClubWorkspace` / `RecordsWorkspace` tabs | `components/WorkspaceTabs.tsx` — Club (Games·Players·Dues·Frames·Bookings) & Records (Counter·Stock·Bills·Orders·Tournaments·Logs) strips above the page |
+| `offline_queue.dart` | `lib/offlineQueue.ts` — counter sales queue in localStorage, `(N pending)` badge + auto-replay on `online` |
+| `shell.dart` → `_showQrCode`, alerts sheet | Topbar **QR** button + `AlertsBell` (out-of-stock red / low-stock gold split) |
+| `settings_screen.dart` → text size | Settings → **Appearance** (theme + text size 85–125%) |
+| `rowdy_care.dart` chips | `SupportChat` quick topics (incl. "Plan / subscription", "Winner kaun pay karta hai") |
+
+**New data fields** (already served by the shared FastAPI backend):
+`Club.qrCode`, `ClubSettings.isOpen`, `MenuItem.image` — editable from
+Settings (logo + payment QR + open/closed) and the item modals.
+
+Not ported: Android/iOS-only pieces — `flutter_local_notifications`
+(no background scheduler on the web) and on-device `pdf`/`printing`
+share-sheets, which the web already covers with the 58mm `ReceiptModal`,
+`PrintSheetModal` and `.xlsx`/JSON exports.
+
+### Running without the backend (design review)
+
+`mock-api/server.mjs` is a dependency-free fixture backend for local UI work:
+
+```bash
+node mock-api/server.mjs     # :8000 — clubs, data, bookings, orders, auth/dev
+npm run dev                  # :5173 — vite proxies /api → :8000
+```
+
+Sign in with the dev email form (any address). Delete the folder if you
+don't need it; nothing in `src/` imports it.
+
 ## Deploy
 
 - React SPA: any static host (Vercel/Netlify). Set `VITE_API_URL` and

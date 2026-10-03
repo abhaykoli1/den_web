@@ -27,15 +27,28 @@ export default function AlertsBell() {
     const members = data.members ?? []
     const stats = data.stats
 
-    // low stock vs per-item reorder level
-    const low = menu.filter((m) => m.active !== false && (m.stockQty ?? 0) <= (m.reorderLevel ?? 5))
-    if (low.length > 0) {
+    // den_app shell.dart parity: out-of-stock (red) and low-stock (gold) are
+    // two separate alerts, both jumping to the Records/Stock surface.
+    const outStock = menu.filter((m) => m.active !== false && (m.stockQty ?? 0) <= 0)
+    if (outStock.length > 0) {
       out.push({
         icon: PackageX,
         tone: 'red',
+        title: `Out of stock · ${outStock.length} item${outStock.length > 1 ? 's' : ''}`,
+        sub: outStock.slice(0, 3).map((m) => m.name).join(', ') + (outStock.length > 3 ? ` +${outStock.length - 3}` : ''),
+        to: '/stock',
+      })
+    }
+    const low = menu.filter(
+      (m) => m.active !== false && (m.stockQty ?? 0) > 0 && (m.stockQty ?? 0) <= (m.reorderLevel ?? 5),
+    )
+    if (low.length > 0) {
+      out.push({
+        icon: PackageX,
+        tone: 'gold',
         title: `Low stock · ${low.length} item${low.length > 1 ? 's' : ''}`,
         sub: low.slice(0, 3).map((m) => `${m.name} (${m.stockQty})`).join(', ') + (low.length > 3 ? ` +${low.length - 3}` : ''),
-        to: '/items',
+        to: '/stock',
       })
     }
 

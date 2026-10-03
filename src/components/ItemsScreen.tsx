@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { PackagePlus, Pencil, Plus, Receipt, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { CloudOff, ImagePlus, ImageOff, PackagePlus, Pencil, Plus, Receipt, RefreshCw, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useClub } from '../context/ClubContext'
 import { useToast } from '../context/ToastContext'
@@ -16,6 +16,14 @@ import {
   TextInput,
 } from './ui'
 import InsightsCard from './InsightsCard'
+import {
+  enqueueBill,
+  isOfflineError,
+  pendingCount,
+  QUEUE_EVENT,
+  syncQueue,
+} from '../lib/offlineQueue'
+import { api, ApiError } from '../lib/api'
 import ReceiptModal, { itemBillReceipt, type ReceiptData } from './ReceiptModal'
 import type { ItemBill, MenuItem, PaymentMode } from '../types'
 
@@ -50,7 +58,30 @@ function ItemModal({ open, onClose, item }: { open: boolean; onClose: () => void
   const [reorderLevel, setReorderLevel] = useState(String(item?.reorderLevel ?? '5'))
   const [unit, setUnit] = useState(item?.unit ?? '')
   const [active, setActive] = useState(item?.active ?? true)
+  // den_app items_screen.dart → _productImagePicker: product photo per item.
+  const [image, setImage] = useState<string | null | undefined>(undefined)
+  const imgRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  const preview = image !== undefined ? image : item?.image ?? null
+
+  const pickImage = (file: File | undefined) => {
+    if (!file || !file.type.startsWith('image/')) return
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 320
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.width * scale))
+      canvas.height = Math.max(1, Math.round(img.height * scale))
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      setImage(canvas.toDataURL('image/png'))
+      URL.revokeObjectURL(img.src)
+    }
+    img.onerror = () => URL.revokeObjectURL(img.src)
+    img.src = URL.createObjectURL(file)
+  }
 
   const save = async () => {
     if (!name.trim()) return
@@ -70,6 +101,7 @@ function ItemModal({ open, onClose, item }: { open: boolean; onClose: () => void
         : { unit: unit.trim() || 'pc' }),
       active,
     }
+    if (image !== undefined) body.image = image ?? ''
     if (!item) body.stockQty = Math.max(0, Math.floor(parseNum(stockQty)))
     const r = item
       ? await mutate(`menu-items/${item.id}`, { method: 'PATCH', body, toast: 'Menu item updated' })
@@ -93,6 +125,23 @@ function ItemModal({ open, onClose, item }: { open: boolean; onClose: () => void
         </>
       }
     >
+      {/* product photo — den_app item sheet parity */}
+      <div className="logo-row" style={{ marginBottom: 10 }}>
+        <div className="logo-preview" style={{ width: 54, height: 54 }}>
+          {preview ? <img src={preview} alt={name || 'Item'} /> : <span className="logo-empty"><ImageOff size={16} /></span>}
+        </div>
+        <div className="stack-xs">
+          <input ref={imgRef} type="file" accept="image/*" className="hidden-file" onChange={(e) => pickImage(e.target.files?.[0])} />
+          <Btn size="sm" variant="outline" onClick={() => imgRef.current?.click()}>
+            <ImagePlus size={12} /> {preview ? 'Change photo' : 'Add photo'}
+          </Btn>
+          {preview && (
+            <Btn size="sm" variant="ghost" className="danger-text" onClick={() => setImage(null)}>
+              <X size={12} /> Remove photo
+            </Btn>
+          )}
+        </div>
+      </div>
       <div className="form-grid two">
         <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
         <Field label="Category"><TextInput value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Cafe / Snacks / Drinks" /></Field>
@@ -168,7 +217,7 @@ function RestockModal({ open, onClose, item }: { open: boolean; onClose: () => v
 // ================================================================ screen
 
 export default function ItemsScreen() {
-  const { data, mutate } = useClub()
+  const { data, mutate, club, refresh } = useClub()
   const toast = useToast()
   const navigate = useNavigate()
   const menuItems = useMemo(() => data?.menuItems ?? [], [data])
@@ -189,6 +238,34 @@ export default function ItemsScreen() {
   const [mix, setMix] = useState({ cash: '', upi: '', card: '' })
   const [busy, setBusy] = useState(false)
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
+  // ★ den_app offline_queue.dart — counter sales queue + auto-sync
+  const [queued, setQueued] = useState(() => pendingCount())
+  const [syncing, setSyncing] = useState(false)
+
+  const runSync = useCallback(async () => {
+    if (pendingCount() === 0 || syncing) return
+    setSyncing(true)
+    const { sent, failed } = await syncQueue()
+    setQueued(pendingCount())
+    setSyncing(false)
+    if (sent > 0) {
+      toast.success(`${sent} offline bill${sent > 1 ? 's' : ''} synced`)
+      await refresh()
+    }
+    failed.forEach((f) => toast.error(`Queued bill dropped — ${f}`))
+  }, [syncing, toast, refresh])
+
+  useEffect(() => {
+    const onQueue = (e: Event) => setQueued((e as CustomEvent<number>).detail ?? pendingCount())
+    const onOnline = () => void runSync()
+    window.addEventListener(QUEUE_EVENT, onQueue)
+    window.addEventListener('online', onOnline)
+    if (navigator.onLine) void runSync()
+    return () => {
+      window.removeEventListener(QUEUE_EVENT, onQueue)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [runSync])
 
   const activeItems = menuItems.filter((m) => m.active)
   const grouped = useMemo(() => {
@@ -258,22 +335,40 @@ export default function ItemsScreen() {
       return
     }
     const billName = customer.trim() || member?.name || ''
+    const payload = {
+      customerName: billName,
+      memberId: memberId || null,
+      // BACKEND-FIX 2: menuItemId (backend model ka field)
+      items: selected.map((m) => ({ menuItemId: m.id, qty: qty[m.id] })),
+      discount: discountNum,
+      // BACKEND-FIX 3: `mode` (paymentMode backend ignore karta tha)
+      mode,
+      // BACKEND-FIX 6: mixed payments[] — sum exactly total
+      ...(mode === 'mixed' ? { payments: mixParts } : {}),
+      // paidAmount/notes backend pe nahi jaate (ItemBillIn me fields nahi hain)
+    }
     setBusy(true)
-    const r = await mutate('item-bills', {
-      body: {
-        customerName: billName,
-        memberId: memberId || null,
-        // BACKEND-FIX 2: menuItemId (backend model ka field)
-        items: selected.map((m) => ({ menuItemId: m.id, qty: qty[m.id] })),
-        discount: discountNum,
-        // BACKEND-FIX 3: `mode` (paymentMode backend ignore karta tha)
-        mode,
-        // BACKEND-FIX 6: mixed payments[] — sum exactly total
-        ...(mode === 'mixed' ? { payments: mixParts } : {}),
-        // paidAmount/notes backend pe nahi jaate (ItemBillIn me fields nahi hain)
-      },
-      toast: `Item bill created · ${billName} · ${formatCurrency(total)}`,
-    })
+    let r: unknown = null
+    try {
+      if (!club) throw new ApiError(0, 'No club selected')
+      r = await api(`/clubs/${club.id}/item-bills`, { method: 'POST', body: payload })
+      toast.success(`Item bill created · ${billName} · ${formatCurrency(total)}`)
+      await refresh()
+    } catch (e) {
+      // ★ offline → queue it locally and replay when the API is back (app parity)
+      if (club && isOfflineError(e)) {
+        enqueueBill(club.id, payload, `${billName} · ${formatCurrency(total)}`)
+        setQueued(pendingCount())
+        toast.info(`Offline — bill queued (${pendingCount()} pending)`)
+        setBusy(false)
+        setQty({})
+        setCustomer('')
+        setDiscount('0')
+        setMix({ cash: '', upi: '', card: '' })
+        return
+      }
+      toast.error(e instanceof ApiError ? e.message : 'Could not create the bill')
+    }
     setBusy(false)
     if (r) {
       // BACKEND-FIX 1: response { bill, message } hai — bill UNWRAP karo
@@ -299,6 +394,11 @@ export default function ItemsScreen() {
     <div className="stack">
       <div className="page-head">
         <div className="row">
+          {queued > 0 && (
+            <Btn variant="gold" size="sm" loading={syncing} onClick={() => void runSync()} title="Replay offline bills">
+              <CloudOff size={12} /> {queued} pending <RefreshCw size={11} />
+            </Btn>
+          )}
           <button className="btn-icon" aria-label="All Item Bills" title="All Item Bills" onClick={() => navigate('/item-bills')}>
             <Receipt size={15} />
           </button>
@@ -461,6 +561,11 @@ export default function ItemsScreen() {
               <div className="menu-list">
                 {items.map((m) => (
                   <div key={m.id} className={`menu-row${m.active ? '' : ' inactive'}`}>
+                    {m.image ? (
+                      <img className="item-thumb" src={m.image} alt={m.name} />
+                    ) : (
+                      <span className="item-thumb item-thumb-empty"><ImageOff size={13} /></span>
+                    )}
                     <span className="menu-name">
                       {m.name}
                       {m.unit && <span className="muted small"> · {m.unit}</span>}

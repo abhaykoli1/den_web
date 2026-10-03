@@ -82,12 +82,16 @@ export interface ClubSettings {
   currency: string
   currencySymbol: string
   monthlyTableDiscount: number
+  /** Club open / closed for business (den_app: Club.isOpen). Absent = open. */
+  isOpen?: boolean
 }
 
 export interface Club {
   id: string
   name: string
   logo?: string | null
+  /** Payment QR image (data-URL/URL) shown at the counter — den_app parity. */
+  qrCode?: string | null
   ownerUserId?: string | null
   settings: ClubSettings
   createdAt?: string
@@ -264,6 +268,8 @@ export interface MenuItem {
   id: string
   clubId: string
   name: string
+  /** Product photo (data-URL/URL) — den_app items screen parity. */
+  image?: string | null
   category: string
   price: number
   costPrice: number
@@ -532,4 +538,54 @@ export interface UtilisationReport {
   peakHour: number | null
   totalMinutes: number
   totalRevenue: number
+}
+
+
+// ---------------------------------------------------------------- bookings
+/** Table reservation coming from the member app (GET /clubs/{id}/bookings). */
+export interface TableBooking {
+  id: string
+  tableId?: string | null
+  tableName?: string | null
+  memberId?: string | null
+  memberName?: string | null
+  dateIST?: string | null
+  startIST?: string | null
+  endIST?: string | null
+  minutes?: number | null
+  players?: number | null
+  status?: string | null
+  note?: string | null
+  createdAt?: string | null
+}
+
+// ------------------------------------------------------------------ orders
+/** Member-app order (GET /clubs/{id}/orders). Backend keys vary by version,
+    so every field stays optional and the screen normalises defensively. */
+export interface MemberOrderItem {
+  name?: string
+  itemName?: string
+  menuItemName?: string
+  qty?: number
+  quantity?: number
+  price?: number
+}
+
+export interface MemberOrder {
+  id?: string
+  orderNumber?: string
+  status?: string
+  orderStatus?: string
+  memberName?: string
+  customerName?: string
+  member?: { name?: string } | null
+  items?: MemberOrderItem[]
+  orderItems?: MemberOrderItem[]
+  total?: number
+  amount?: number
+  grandTotal?: number
+  createdAt?: string
+  orderedAt?: string
+  tableName?: string
+  note?: string
 }

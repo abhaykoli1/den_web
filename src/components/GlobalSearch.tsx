@@ -25,11 +25,15 @@ interface SearchHit {
 }
 
 const QUICK_PAGES: Array<{ match: string; label: string; to: string; staffOk: boolean }> = [
-  { match: 'tables table live billing', label: 'Tables · live billing', to: '/tables', staffOk: true },
+  { match: 'home overview pulse dashboard quick actions', label: 'Home · aaj ka pulse', to: '/home', staffOk: true },
+  { match: 'tables table live billing games', label: 'Games · live billing', to: '/tables', staffOk: true },
   { match: 'players members all', label: 'All Players / Members', to: '/players', staffOk: true },
   { match: 'due desk dues collect', label: 'Due Desk · collections', to: '/due-desk', staffOk: true },
   { match: 'item billing counter cafe', label: 'Item Billing · counter', to: '/items', staffOk: true },
   { match: 'item bills receipts', label: 'Item Bills · history', to: '/item-bills', staffOk: true },
+  { match: 'stock inventory restock reorder menu items', label: 'Stock · inventory', to: '/stock', staffOk: true },
+  { match: 'bookings reservations slots table booking', label: 'Bookings · reservations', to: '/bookings', staffOk: true },
+  { match: 'orders member app order pending completed', label: 'Orders · member app', to: '/orders', staffOk: true },
   { match: 'tournaments tournament events bracket league', label: 'Tournaments', to: '/tournaments', staffOk: true },
   { match: 'frames history bills', label: 'Frames · bill history', to: '/frames', staffOk: true },
   { match: 'logs activity', label: 'Activity Logs', to: '/logs', staffOk: true },

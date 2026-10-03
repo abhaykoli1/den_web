@@ -2,7 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   Activity,
+  CalendarDays,
   Compass,
+  Home,
   FileText,
   Grid3x3,
   Headset,
@@ -11,7 +13,9 @@ import {
   LogOut,
   Menu,
   Moon,
+  Package,
   Plus,
+  QrCode,
   Receipt,
   RefreshCw,
   ScrollText,
@@ -29,6 +33,7 @@ import {
 } from 'lucide-react'
 import SupportChat from './SupportChat'
 import AlertsBell from './AlertsBell'
+import WorkspaceTabs from './WorkspaceTabs'
 import GlobalSearch from './GlobalSearch'
 import Walkthrough from './Walkthrough'
 import { useAuth } from '../context/AuthContext'
@@ -79,11 +84,18 @@ const NAV: NavEntry[] = [
     subtitle: 'Manage staff roles and permissions',
     adminOnly: true,
   },
-  { to: '/tables', label: 'Games', icon: Grid3x3, title: 'Games', subtitle: 'Live game billing · wallet & due auto-applied', section: 'Billing' },
+  // ★ den_app parity — Home overview (workspace_hubs.dart HomeOverview) sabse upar.
+  { to: '/home', label: 'Home', icon: Home, title: 'Home', subtitle: "Aaj ka pulse — live tables, dues, stock aur quick actions", section: 'Overview' },
+  { to: '/tables', label: 'Games', icon: Grid3x3, title: 'Games', subtitle: 'Live game billing · wallet & due auto-applied', section: 'Club' },
   { to: '/players', label: 'All Players', icon: Users, title: 'All Players', subtitle: 'Players, wallets, passes & dues' },
   { to: '/due-desk', label: 'Due Desk', icon: Wallet, title: 'Due Desk', subtitle: 'Manage player dues and payments' },
-  { to: '/items', label: 'Item Billing', icon: ShoppingBag, title: 'Item Billing', subtitle: 'Counter sales — cafe, snacks & misc items' },
+  { to: '/items', label: 'Item Billing', icon: ShoppingBag, title: 'Item Billing', subtitle: 'Counter sales — cafe, snacks & misc items', section: 'Records' },
+  // ★ den_app Records hub ka Stock tab — item master, restock & reorder levels
+  { to: '/stock', label: 'Stock', icon: Package, title: 'Stock', subtitle: 'Item master, photos, restock (auto-expense) & reorder levels' },
   { to: '/item-bills', label: 'Item Bills', icon: Receipt, title: 'Item Bills', subtitle: 'Counter item bills · history, receipts & dues' },
+  // ★ den_app parity — member-app bookings & orders (bookings_screen.dart / orders_screen.dart)
+  { to: '/bookings', label: 'Bookings', icon: CalendarDays, title: 'Bookings', subtitle: 'Manage upcoming table reservations' },
+  { to: '/orders', label: 'Orders', icon: ShoppingBag, title: 'Orders', subtitle: 'Member app orders — pending, ready & completed' },
   { to: '/tournaments', label: 'Tournaments', icon: Trophy, title: 'Tournaments', subtitle: 'Players & entry fees → knockout → match tables → champion' },
   { to: '/frames', label: 'Frames', icon: History, title: 'Frame Bills', subtitle: 'Frame billing & history · winner corrections re-bill automatically' },
   { to: '/logs', label: 'Logs', icon: Activity, title: 'Activity Logs', subtitle: 'Billing, payments, warnings and admin actions' },
@@ -128,6 +140,8 @@ export default function Layout() {
   const [savingClub, setSavingClub] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [tour, setTour] = useState(false)
+  // den_app shell.dart → _showQrCode(): counter pe payment QR ek tap me.
+  const [qrOpen, setQrOpen] = useState(false)
 
   // First visit on this device → auto-launch the walkthrough once.
   useEffect(() => {
@@ -145,7 +159,7 @@ export default function Layout() {
     }
     return HIDDEN_PAGES.find((p) => location.pathname.startsWith(p.to))
   }, [location.pathname])
-  const title = location.pathname.startsWith('/master') ? 'Master Admin' : (current?.title ?? 'Tables')
+  const title = location.pathname.startsWith('/master') ? 'Master Admin' : (current?.title ?? 'Home')
   const subtitle = location.pathname.startsWith('/master')
     ? 'Manage platform-wide administration'
     : current?.subtitle
@@ -336,6 +350,16 @@ export default function Layout() {
           >
             <Search size={15} />
           </button>
+          {club && (
+            <button
+              className="btn-icon"
+              aria-label="Payment QR code"
+              title="Payment QR code"
+              onClick={() => setQrOpen(true)}
+            >
+              <QrCode size={15} />
+            </button>
+          )}
           {club && <AlertsBell />}
           {user?.role === 'master' ? (
             <span className="badge badge-gold">Master Admin</span>
@@ -384,6 +408,7 @@ export default function Layout() {
                   <RefreshCw size={13} className={(isMasterRoute ? maRefreshing : refreshing) ? 'spin' : ''} />
                 </button>
               </div>
+              <WorkspaceTabs />
               <Outlet />
             </>
           )}
@@ -393,6 +418,17 @@ export default function Layout() {
       <SupportChat />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
       <Walkthrough active={tour} onClose={() => setTour(false)} />
+
+      <Modal open={qrOpen} onClose={() => setQrOpen(false)} title="Payment QR code" width={320}>
+        {club?.qrCode ? (
+          <div className="qr-view">
+            <img src={club.qrCode} alt={`${club.name} payment QR`} />
+            <span className="muted small">{club.name}</span>
+          </div>
+        ) : (
+          <p className="muted small">Upload a payment QR code in Settings → Club settings.</p>
+        )}
+      </Modal>
 
       <Modal
         open={clubModal}

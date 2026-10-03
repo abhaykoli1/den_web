@@ -5,7 +5,19 @@ import { api } from '../lib/api'
 type Msg = { from: 'bot' | 'user'; text: string }
 type SupportContact = { email: string; phone: string }
 
-const QUICK = ['Table billing', 'Day Close kya hai', 'Due collect kaise', 'Advance / Note / Move', 'League tournament', 'Stock kam ho to', 'Excel & PDF export', 'Human se baat']
+// den_app rowdy_care.dart ke quick-topic chips ke saath 1:1 parity.
+const QUICK = [
+  'Table billing',
+  'Day Close kya hai',
+  'Due collect kaise',
+  'Advance / Note / Move',
+  'League tournament',
+  'Stock kam ho to',
+  'Excel & PDF export',
+  'Plan / subscription',
+  'Winner kaun pay karta hai',
+  'Human se baat',
+]
 
 const WELCOME: Msg = {
   from: 'bot',
