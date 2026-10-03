@@ -79,7 +79,7 @@ const NAV: NavEntry[] = [
     subtitle: 'Manage staff roles and permissions',
     adminOnly: true,
   },
-  { to: '/tables', label: 'Tables', icon: Grid3x3, title: 'Tables', subtitle: 'Live table billing · wallet & due auto-applied', section: 'Billing' },
+  { to: '/tables', label: 'Games', icon: Grid3x3, title: 'Games', subtitle: 'Live game billing · wallet & due auto-applied', section: 'Billing' },
   { to: '/players', label: 'All Players', icon: Users, title: 'All Players', subtitle: 'Players, wallets, passes & dues' },
   { to: '/due-desk', label: 'Due Desk', icon: Wallet, title: 'Due Desk', subtitle: 'Manage player dues and payments' },
   { to: '/items', label: 'Item Billing', icon: ShoppingBag, title: 'Item Billing', subtitle: 'Counter sales — cafe, snacks & misc items' },

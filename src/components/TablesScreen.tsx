@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRightLeft, Banknote, Hand, Play, Plus, RotateCcw, Square, StickyNote } from 'lucide-react'
+import { ArrowRightLeft, Banknote, Hand, Play, Plus, RotateCcw, Search, Square, StickyNote, UserPlus } from 'lucide-react'
 import { useClub } from '../context/ClubContext'
 import { useToast } from '../context/ToastContext'
 import {
@@ -231,7 +231,7 @@ function FreeCard({ table }: { table: ClubTable }) {
       )}
 
       <Btn variant="green" className="btn-block" loading={busy} onClick={start}>
-        <Play size={13} /> Start Table · {formatCurrency(rate)}/hr
+        <Play size={13} /> Start Game · {formatCurrency(rate)}/hr
       </Btn>
     </Card>
   )
@@ -400,6 +400,15 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
   const [busy, setBusy] = useState(false)
   const [itemBusy, setItemBusy] = useState<string | null>(null)
   const [qaModal, setQaModal] = useState<'advance' | 'note' | 'move' | null>(null)
+  const [playerModal, setPlayerModal] = useState(false)
+  const [playerQuery, setPlayerQuery] = useState('')
+  const [playerMemberId, setPlayerMemberId] = useState('')
+  const [guestName, setGuestName] = useState('')
+  const [playerTeam, setPlayerTeam] = useState<Team>('A')
+  const [playerSaving, setPlayerSaving] = useState(false)
+  const members = useMemo(() => (data?.members ?? []).filter((m) => m.active), [data])
+  const availableMembers = members.filter((m) => !session.players.some((p) => p.memberId === m.id))
+  const filteredMembers = availableMembers.filter((m) => m.name.toLowerCase().includes(playerQuery.toLowerCase()))
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000)
@@ -423,6 +432,29 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
       toast: 'Item added to session',
     })
     setItemBusy(null)
+  }
+
+  const addPlayer = async () => {
+    const selected = members.find((m) => m.id === playerMemberId)
+    const label = selected?.name || guestName.trim()
+    if (!label) return
+    setPlayerSaving(true)
+    const result = await mutate(`sessions/${session.id}/players`, {
+      body: {
+        label,
+        type: selected ? 'member' : 'guest',
+        ...(selected ? { memberId: selected.id } : {}),
+        ...(session.matchMode === '2v2' ? { team: playerTeam } : {}),
+      },
+      toast: `Player added · ${label}`,
+    })
+    setPlayerSaving(false)
+    if (result) {
+      setPlayerModal(false)
+      setPlayerQuery('')
+      setPlayerMemberId('')
+      setGuestName('')
+    }
   }
 
   const attached = session.items ?? []
@@ -490,6 +522,9 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
       )}
 
       <div className="qa-row">
+        <Btn size="sm" variant="ghost" onClick={() => setPlayerModal(true)} title="Add player">
+          <UserPlus size={12} /> Player
+        </Btn>
         <Btn size="sm" variant="ghost" onClick={() => setQaModal('advance')} title="Collect advance">
           <Banknote size={12} /> Advance
         </Btn>
@@ -508,6 +543,36 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
       {qaModal === 'advance' && <AdvanceModal session={session} table={table} onClose={() => setQaModal(null)} />}
       {qaModal === 'note' && <NoteModal session={session} table={table} onClose={() => setQaModal(null)} />}
       {qaModal === 'move' && <MoveModal session={session} table={table} onClose={() => setQaModal(null)} />}
+      <Modal
+        open={playerModal}
+        onClose={() => setPlayerModal(false)}
+        title={`Add player · ${table.name}`}
+        width={420}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setPlayerModal(false)}>Cancel</Btn>
+            <Btn variant="green" loading={playerSaving} disabled={!playerMemberId && !guestName.trim()} onClick={() => void addPlayer()}>
+              <UserPlus size={13} /> Add player
+            </Btn>
+          </>
+        }
+      >
+        <div className="search-box">
+          <Search size={13} />
+          <input value={playerQuery} onChange={(e) => setPlayerQuery(e.target.value)} placeholder="Search member" aria-label="Search member" />
+        </div>
+        <div className="stack-sm" style={{ maxHeight: 260, overflowY: 'auto', marginTop: 8 }}>
+          <button type="button" className={`chip${playerMemberId === '' ? ' active' : ''}`} onClick={() => setPlayerMemberId('')}>Guest / walk-in</button>
+          {filteredMembers.map((m) => (
+            <button key={m.id} type="button" className={`chip${playerMemberId === m.id ? ' active' : ''}`} onClick={() => { setPlayerMemberId(m.id); setGuestName('') }}>
+              {m.name}{m.dueAmount > 0 ? ` · due ${formatCurrency(m.dueAmount)}` : ''}
+            </button>
+          ))}
+          {filteredMembers.length === 0 && <span className="muted small">No members found</span>}
+        </div>
+        {!playerMemberId && <TextInput value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Or enter guest name" aria-label="Guest name" />}
+        {session.matchMode === '2v2' && <Seg ariaLabel="Team" value={playerTeam} onChange={(v) => setPlayerTeam(v as Team)} options={[{ value: 'A', label: 'Team A' }, { value: 'B', label: 'Team B' }]} />}
+      </Modal>
     </Card>
   )
 }
@@ -940,7 +1005,7 @@ export default function TablesScreen() {
       <InsightsCard compact scopes={['live', 'members', 'stock', 'revenue']} max={4} title="Smart Insights · Today" />
 
       {tables.length === 0 ? (
-        <EmptyState title="No tables yet" hint="Add tables from Settings → Table Pricing." />
+        <EmptyState title="No games yet" hint="Add games from Settings → Game Pricing." />
       ) : (
         <div className="table-grid">
           {tables.map((t) => {
@@ -952,7 +1017,7 @@ export default function TablesScreen() {
                     <div className="tc-name">{t.name}</div>
                     <Badge kind="muted">Disabled</Badge>
                   </div>
-                  <p className="muted small">Enable this table from Settings.</p>
+                  <p className="muted small">Enable this game from Settings.</p>
                 </Card>
               )
             }

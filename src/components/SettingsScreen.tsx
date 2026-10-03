@@ -96,17 +96,17 @@ function TableModal({ onClose, table }: { onClose: () => void; table: ClubTable 
     <Modal
       open
       onClose={onClose}
-      title={table ? `Edit · ${table.name}` : 'Add Table'}
+      title={table ? `Edit · ${table.name}` : 'Add Game'}
       width={460}
       footer={
         <>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn variant="green" loading={busy} disabled={!name.trim()} onClick={save}>{table ? 'Save Table' : 'Add Table'}</Btn>
+          <Btn variant="green" loading={busy} disabled={!name.trim()} onClick={save}>{table ? 'Save Game' : 'Add Game'}</Btn>
         </>
       }
     >
       <div className="form-grid two">
-        <Field label="Table name"><TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Snooker" /></Field>
+        <Field label="Game name"><TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Pool / PS / Snooker" /></Field>
         <Field label="Default hourly rate"><TextInput inputMode="decimal" value={hourly} onChange={(e) => setHourly(e.target.value)} placeholder="240" /></Field>
         <Field label="2P rate (optional)"><TextInput inputMode="decimal" value={p2} onChange={(e) => setP2(e.target.value)} placeholder="blank = default" /></Field>
         <Field label="3P rate (optional)"><TextInput inputMode="decimal" value={p3} onChange={(e) => setP3(e.target.value)} /></Field>
@@ -527,12 +527,12 @@ export default function SettingsScreen() {
       </div>
 
       <div style={{ display: 'grid', flexDirection: 'column', gap: 10, alignItems: 'start' }}>
-        {/* ---------------------------------------------------- Table pricing */}
+        {/* ---------------------------------------------------- Game pricing */}
         <Card>
           <div className="section-head">
-            <div className="section-title">Table Pricing</div>
+            <div className="section-title">Game Pricing</div>
             <Btn size="sm" variant="green" onClick={() => setTableModal({ table: null })}>
-              <Plus size={12} /> Add Table
+              <Plus size={12} /> Add
             </Btn>
           </div>
           <div className="menu-list">
@@ -566,7 +566,7 @@ export default function SettingsScreen() {
                 </div>
               </div>
             ))}
-            {tables.length === 0 && <p className="muted small">No tables yet.</p>}
+            {tables.length === 0 && <p className="muted small">No games yet.</p>}
           </div>
         </Card>
 
