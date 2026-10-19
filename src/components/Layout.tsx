@@ -199,7 +199,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="app-shell" style={{paddingTop:50}}>
+    <div className="app-shell" style={{paddingTop:70}}>
       {drawer && <div className="sidebar-backdrop" onClick={() => setDrawer(false)} />}
       <aside className={`sidebar${drawer ? ' open' : ''}`}>
         <div className="brand">
