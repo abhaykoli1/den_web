@@ -1,7 +1,7 @@
 /* Rowdy's Den — service worker (PWA install + sensible caching).
    Static app shell: cache-first. API/data calls: straight to network —
    billing data must never be served stale. */
-const CACHE = 'rowdys-den-v1'
+const CACHE = 'rowdys-den-v2'
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png']
 
 self.addEventListener('install', (event) => {

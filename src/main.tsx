@@ -7,6 +7,15 @@ import { ToastProvider } from './context/ToastContext'
 import { AuthProvider } from './context/AuthContext'
 import './styles/global.css'
 
+// Keep the installed iOS PWA at its designed scale. iOS Safari may still honor
+// gesture zoom despite the viewport meta tag, so block pinch gestures too.
+const preventZoomGesture = (event: Event) => event.preventDefault()
+document.addEventListener('gesturestart', preventZoomGesture, { passive: false })
+document.addEventListener('gesturechange', preventZoomGesture, { passive: false })
+document.addEventListener('touchmove', (event: TouchEvent) => {
+  if (event.touches.length > 1) event.preventDefault()
+}, { passive: false })
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
