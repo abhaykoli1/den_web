@@ -15,15 +15,12 @@ const CLUB_TABS: Tab[] = [
   { to: '/players', label: 'Players' },
   { to: '/due-desk', label: 'Dues' },
   { to: '/frames', label: 'Frames' },
-  { to: '/bookings', label: 'Bookings' },
 ]
 
 const RECORDS_TABS: Tab[] = [
   { to: '/items', label: 'Counter' },
   { to: '/stock', label: 'Stock' },
-  { to: '/item-bills', label: 'Bills' },
   { to: '/orders', label: 'Orders' },
-  { to: '/tournaments', label: 'Tournaments' },
   { to: '/logs', label: 'Logs' },
 ]
 

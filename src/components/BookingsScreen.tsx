@@ -2,7 +2,7 @@
 // GET /clubs/{id}/bookings?club_id={id} · DELETE /clubs/{id}/bookings/{bookingId}
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, RefreshCw, X } from 'lucide-react'
-import { api, ApiError, asArray } from '../lib/api'
+import { api, ApiError, asArray, isRecord } from '../lib/api'
 import { useClub } from '../context/ClubContext'
 import { useToast } from '../context/ToastContext'
 import { Badge, Btn, Card, ConfirmModal, EmptyState, Seg, StatCard } from './ui'
@@ -35,8 +35,8 @@ export default function BookingsScreen() {
     setLoading(true)
     setError(null)
     try {
-      const res = await api<any>(`/clubs/${club.id}/bookings?club_id=${encodeURIComponent(club.id)}`)
-      const raw = Array.isArray(res) ? res : res?.bookings
+      const res = await api<unknown>(`/clubs/${club.id}/bookings?club_id=${encodeURIComponent(club.id)}`)
+      const raw = Array.isArray(res) ? res : isRecord(res) ? res.bookings : []
       setBookings(asArray<TableBooking>(raw))
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load bookings')

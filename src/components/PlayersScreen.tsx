@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Mail, Pencil, Plus, ScrollText, Search, Trash2 } from 'lucide-react'
+import { Mail, Pencil, Plus, ScrollText, Search, Trash2, WalletCards } from 'lucide-react'
 import { api, asArray } from '../lib/api'
 import { useClub } from '../context/ClubContext'
 import { useToast } from '../context/ToastContext'
@@ -88,6 +88,11 @@ function MemberModal({ open, onClose, member, plans }: {
   if (!form) return null
   const plan = plans.find((p) => p.id === form.planId) ?? null
   const alreadyAssigned = Boolean(member && member.planId && member.planId === form.planId)
+  const planWalletCredit = (candidate: MembershipPlan | null) =>
+    candidate?.type === 'wallet' ? Math.max(0, candidate.value) : 0
+  const planPassFrames = (candidate: MembershipPlan | null) =>
+    candidate?.type === 'pass' ? Math.max(0, Math.trunc(candidate.value)) : 0
+  const previewedPlan = plan && !alreadyAssigned ? plan : null
   const category = plan
     ? plan.type
     : derivedCategory({
@@ -118,6 +123,14 @@ function MemberModal({ open, onClose, member, plans }: {
       passFramesLeft: Math.trunc(parseNum(form.passFramesLeft)),
       notes: form.notes || null,
       active: form.active,
+    }
+    // Creating a member applies the selected plan benefit on the server, so
+    // send the opening balance without that previewed benefit. Editing sends
+    // the displayed final balances because the patch endpoint grants the plan
+    // and then applies explicit balance fields.
+    if (!member) {
+      body.walletBalance = Math.max(0, parseNum(form.walletBalance) - planWalletCredit(previewedPlan))
+      body.passFramesLeft = Math.max(0, Math.trunc(parseNum(form.passFramesLeft) - planPassFrames(previewedPlan)))
     }
     if (!alreadyAssigned) {
       body.planId = form.planId || null
@@ -156,7 +169,22 @@ function MemberModal({ open, onClose, member, plans }: {
           </div>
         </Field>
         <Field label="Membership Plan">
-          <Select value={form.planId} disabled={alreadyAssigned} onChange={(e) => setForm({ ...form, planId: e.target.value })}>
+          <Select value={form.planId} disabled={alreadyAssigned} onChange={(e) => {
+            const previous = plans.find((candidate) => candidate.id === form.planId) ?? null
+            const next = plans.find((candidate) => candidate.id === e.target.value) ?? null
+            const previousPreview = previous && previous.id !== member?.planId ? previous : null
+            const nextPreview = next && next.id !== member?.planId ? next : null
+            const walletBalance = parseNum(form.walletBalance)
+              - planWalletCredit(previousPreview) + planWalletCredit(nextPreview)
+            const passFramesLeft = Math.trunc(parseNum(form.passFramesLeft))
+              - planPassFrames(previousPreview) + planPassFrames(nextPreview)
+            setForm({
+              ...form,
+              planId: e.target.value,
+              walletBalance: String(Math.max(0, walletBalance)),
+              passFramesLeft: String(Math.max(0, passFramesLeft)),
+            })
+          }}>
             <option value="">No plan</option>
             {plans.filter((p) => p.active || p.id === form.planId).map((p) => (
               <option key={p.id} value={p.id}>{p.name} · {titleCase(p.type)} · {formatCurrency(p.amount)}</option>
@@ -226,9 +254,9 @@ function RecordModal({ member, onClose }: { member: Member; onClose: () => void 
         {member.notes && <span className="muted small">{member.notes}</span>}
       </div>
       <div className="grid-stats three" style={{ margin: '10px 0' }}>
-        <StatCard label="Due" tone="red" value={formatCurrency(member.dueAmount)} />
-        <StatCard label="Wallet" tone="gold" value={formatCurrency(member.walletBalance)} />
-        <StatCard label="Pass Frames" tone="blue" value={member.passFramesLeft} />
+        <StatCard label="Due" tone="red" value={formatCurrency(member.dueAmount)} sub="pending to collect" />
+        <StatCard label="Wallet" tone="gold" value={formatCurrency(member.walletBalance)} sub="available credit" />
+        <StatCard label="Pass Frames" tone="blue" value={member.passFramesLeft} sub="frames remaining" />
       </div>
       {!logs ? (
         <p className="muted small">Loading activity…</p>
@@ -264,32 +292,16 @@ function PlayerCard({ member, onEdit, onDelete, onRecord }: {
 }) {
   const { mutate } = useClub()
   const toast = useToast()
-  const [name, setName] = useState(member.name)
-  const [phone, setPhone] = useState(member.phone)
   const [signedBal, setSignedBal] = useState(() => String(member.walletBalance - member.dueAmount))
   const [payAmt, setPayAmt] = useState('')
-  const [busy, setBusy] = useState<null | 'save' | 'bal' | 'cash' | 'upi' | 'notify'>(null)
+  const [balanceOpen, setBalanceOpen] = useState(false)
+  const [busy, setBusy] = useState<null | 'bal' | 'cash' | 'upi' | 'notify'>(null)
 
   useEffect(() => {
-    setName(member.name)
-    setPhone(member.phone)
     setSignedBal(String(Math.round((member.walletBalance - member.dueAmount) * 100) / 100))
   }, [member.id, member.updatedAt])
 
-  const due = member.dueAmount > 0
-  const wallet = member.walletBalance > 0
-  const balanceText = due ? `Due ${formatCurrency(member.dueAmount)}` : wallet ? `Wallet ${formatCurrency(member.walletBalance)}` : 'Clear ₹0'
-  const balanceClass = due ? 'money-red' : wallet ? 'money-gold' : 'money-green'
-
-  const save = async () => {
-    setBusy('save')
-    await mutate(`members/${member.id}`, {
-      method: 'PATCH',
-      body: { name: name.trim() || member.name, phone: phone.trim() },
-      toast: 'Member updated',
-    })
-    setBusy(null)
-  }
+  const category = derivedCategory(member)
 
   // One tap → member gets their wallet/pass/due snapshot on email.
   const notify = async () => {
@@ -306,12 +318,13 @@ function PlayerCard({ member, onEdit, onDelete, onRecord }: {
   const setBalance = async () => {
     const v = parseNum(signedBal)
     setBusy('bal')
-    await mutate(`members/${member.id}`, {
+    const result = await mutate(`members/${member.id}`, {
       method: 'PATCH',
       body: { walletBalance: Math.max(0, v), dueAmount: Math.max(0, -v) },
       toast: `Balance updated · ${v >= 0 ? 'wallet' : 'due'} ${formatCurrency(Math.abs(v))}`,
     })
     setBusy(null)
+    if (result) setBalanceOpen(false)
   }
 
   const pay = async (mode: 'cash' | 'upi') => {
@@ -340,53 +353,100 @@ function PlayerCard({ member, onEdit, onDelete, onRecord }: {
     : null
 
   return (
-    <Card className={`player-card${member.active ? '' : ' inactive'}`}>
-      <div className="pc-main">
-        <div className="pc-info">
-          <div className="pc-namerow">
-            <span className="pc-name">{member.name}</span>
-            {!member.active && <Badge kind="muted">Inactive</Badge>}
-            {member.planName && <Badge kind="gold">{member.planName}</Badge>}
-            {member.tableDiscountPercent > 0 && <Badge kind="blue">Premium {member.tableDiscountPercent}%</Badge>}
-            {member.passFramesLeft > 0 && <Badge kind="green">Pass {member.passFramesLeft} left</Badge>}
-            {validity && <Badge kind={validity.startsWith('Valid') ? 'muted' : 'red'}>{validity}</Badge>}
-          </div>
-          <div className="muted small">{member.phone || 'No phone'}</div>
-          {member.notes && <div className="muted small pc-notes">{member.notes}</div>}
+    <>
+    <Card className={`player-card player-card-${category}${member.active ? '' : ' inactive'}`}>
+      <div className="player-card-head">
+        <span className="player-avatar" aria-hidden="true">{member.name.trim().charAt(0).toUpperCase() || '?'}</span>
+        <div className="player-identity">
+          <span className="pc-name">{member.name}</span>
+          <span className="muted small">{member.email || member.phone || 'No contact'}</span>
         </div>
-        <div className={`pc-balance ${balanceClass}`}>{balanceText}</div>
+        <Badge kind={category === 'wallet' ? 'gold' : category === 'due' ? 'red' : category === 'pass' ? 'blue' : 'muted'}>
+          {category.toUpperCase()}
+        </Badge>
       </div>
 
-      <div className="pc-edit">
-        <TextInput value={name} aria-label="Member name" onChange={(e) => setName(e.target.value)} />
-        <TextInput value={phone} aria-label="Member phone" placeholder="Phone" onChange={(e) => setPhone(e.target.value)} />
-        <div className="row">
-          <TextInput inputMode="decimal" value={signedBal} aria-label="Signed balance (+wallet / -due)" title="Positive = wallet, negative = due, zero = clear" onChange={(e) => setSignedBal(e.target.value)} />
-          <Btn size="sm" variant="blue" loading={busy === 'bal'} onClick={setBalance}>Set Balance</Btn>
-        </div>
-        <div className="row">
-          <Btn size="sm" variant="green" loading={busy === 'save'} onClick={save}>Save</Btn>
-          <span className="spacer" />
-          <TextInput inputMode="decimal" value={payAmt} placeholder="Pay amount" aria-label="Payment amount" style={{ maxWidth: 110 }} onChange={(e) => setPayAmt(e.target.value)} />
-          <Btn size="sm" variant="gold" loading={busy === 'cash'} disabled={member.dueAmount <= 0} onClick={() => pay('cash')}>Cash</Btn>
-          <Btn size="sm" variant="blue" loading={busy === 'upi'} disabled={member.dueAmount <= 0} onClick={() => pay('upi')}>Online</Btn>
-        </div>
+      <div className="player-card-balances">
+        <Badge kind="muted">WALLET <b className="money-gold">{formatCurrency(member.walletBalance)}</b></Badge>
+        <Badge kind="muted">DUE <b className="money-red">{formatCurrency(member.dueAmount)}</b></Badge>
+        {member.planName && <Badge kind="muted">PLAN <b className="money-gold">{member.planName}</b></Badge>}
+        {member.passFramesLeft > 0 && <Badge kind="muted">PASS <b className="money-green">{member.passFramesLeft}</b></Badge>}
+        {member.tableDiscountPercent > 0 && <Badge kind="muted">PREMIUM <b className="money-blue">{member.tableDiscountPercent}%</b></Badge>}
+        {!member.active && <Badge kind="muted">INACTIVE</Badge>}
+        {validity && <Badge kind={validity.startsWith('Valid') ? 'muted' : 'red'}>{validity}</Badge>}
       </div>
+      {member.notes && <div className="muted small pc-notes">{member.notes}</div>}
 
-      <div className="pc-footer">
-        <button aria-label="Record" title="Record" onClick={onRecord}><ScrollText size={13} /><span>Record</span></button>
-        <button aria-label="Edit" title="Edit" onClick={onEdit}><Pencil size={13} /><span>Edit</span></button>
+      <div className="player-card-actions">
         <button
-          aria-label="Notify balance"
+          className="player-action player-action-wallet"
+          aria-label={`Set balance or collect payment for ${member.name}`}
+          title="Wallet and payments"
+          aria-expanded={balanceOpen}
+          onClick={() => setBalanceOpen(true)}
+        >
+          <WalletCards size={15} /><span>Balance</span>
+        </button>
+        <button className="player-action player-action-record" aria-label={`View activity for ${member.name}`} title="Activity" onClick={onRecord}>
+          <ScrollText size={15} /><span>Record</span>
+        </button>
+        <button
+          className="player-action player-action-mail"
+          aria-label={`Email balance update to ${member.name}`}
           title={member.email ? `Email ${member.name} their balance/pass update` : 'Add an email on this member first'}
           disabled={busy === 'notify'}
           onClick={notify}
         >
-          <Mail size={13} /><span>{busy === 'notify' ? 'Sending…' : 'Notify'}</span>
+          <Mail size={15} /><span>{busy === 'notify' ? 'Sending' : 'Notify'}</span>
         </button>
-        <button aria-label="Delete" title="Delete" className="danger" onClick={onDelete}><Trash2 size={13} /><span>Delete</span></button>
+        <button className="player-action" aria-label={`Edit ${member.name}`} title="Edit" onClick={onEdit}>
+          <Pencil size={15} /><span>Edit</span>
+        </button>
+        <button className="player-action player-action-delete" aria-label={`Delete ${member.name}`} title="Delete" onClick={onDelete}>
+          <Trash2 size={15} /><span>Delete</span>
+        </button>
       </div>
+
     </Card>
+    <Modal
+      open={balanceOpen}
+      onClose={() => setBalanceOpen(false)}
+      title={`Balance · ${member.name}`}
+      footer={
+        <>
+          <Btn variant="green" loading={busy === 'bal'} onClick={setBalance}>Set balance</Btn>
+          <Btn variant="outline" onClick={() => setBalanceOpen(false)}>Close</Btn>
+        </>
+      }
+    >
+      <div className="player-balance-dialog">
+        <p className="muted small">Positive amount sets wallet balance; negative amount sets due.</p>
+        <TextInput
+          inputMode="decimal"
+          value={signedBal}
+          aria-label="Signed balance (+wallet / -due)"
+          title="Positive = wallet, negative = due, zero = clear"
+          onChange={(e) => setSignedBal(e.target.value)}
+        />
+        {member.dueAmount > 0 && (
+          <div className="player-collect-dialog">
+            <div className="player-collect-title">Collect due · {formatCurrency(member.dueAmount)}</div>
+            <TextInput
+              inputMode="decimal"
+              value={payAmt}
+              placeholder="Amount"
+              aria-label="Payment amount"
+              onChange={(e) => setPayAmt(e.target.value)}
+            />
+            <div className="player-collect-actions">
+              <Btn variant="green" loading={busy === 'cash'} onClick={() => pay('cash')}>Cash · Collect</Btn>
+              <Btn variant="outline" loading={busy === 'upi'} onClick={() => pay('upi')}>UPI · Collect</Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+    </>
   )
 }
 
@@ -422,26 +482,26 @@ export default function PlayersScreen() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div className="row">
-          <div className="search-box">
-            <Search size={13} />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or phone" aria-label="Search players" />
-          </div>
-          <Btn variant="green" onClick={() => setModal({ member: null })}>
-            <Plus size={13} /> Add Player
-          </Btn>
-        </div>
-      </div>
-
+      <InsightsCard compact scopes={['members']} max={2} />
       <div className="grid-stats">
         <StatCard label="Players" tone="blue" value={members.length} sub={`${members.filter((m) => m.active).length} active`} />
         <StatCard label="Wallet Money" tone="gold" value={formatCurrency(wallets)} sub="Prepaid credit held" />
 
         <StatCard label="Total Due" tone="red" value={formatCurrency(dues)} sub={`${members.filter((m) => m.dueAmount > 0).length} members pending`} />
       </div>
+      <div className="page-head">
+        <div className="row players-search-row">
+          <div className="search-box players-search">
+            <Search size={13} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or phone" aria-label="Search players" />
+          </div>
+          <Btn variant="outline" size="md" style={{border :"1px solid var(--border)"}} className="header-action" onClick={() => setModal({ member: null })}>
+            <Plus size={13} /> Add Player
+          </Btn>
+        </div>
+      </div>
 
-      <InsightsCard compact scopes={['members']} max={2} />
+
 
       {filtered.length === 0 ? (
         <EmptyState title={search ? 'No players match the search' : 'No players yet'} hint={search ? 'Try another name or phone.' : 'Add your first club member.'} />

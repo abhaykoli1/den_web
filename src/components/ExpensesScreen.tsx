@@ -165,6 +165,7 @@ export default function ExpensesScreen() {
 
   return (
     <div className="stack">
+      <InsightsCard month={month} scopes={['expenses', 'finance']} max={4} title="Smart Insights · Expenses" />
       <div className="page-head">
         <div className="row">
           <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value || monthKey())} aria-label="Month" />
@@ -191,8 +192,6 @@ export default function ExpensesScreen() {
           sub="run rate this month"
         />
       </div>
-
-      <InsightsCard month={month} scopes={['expenses', 'finance']} max={4} title="Smart Insights · Expenses" />
 
       {categories.length > 0 && (
         <div className="chip-row">

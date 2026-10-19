@@ -1,25 +1,45 @@
 import { useMemo, useState } from 'react'
-import { Printer, Repeat, Search } from 'lucide-react'
+import { Crown, Printer, Repeat } from 'lucide-react'
 import { useClub } from '../context/ClubContext'
-import InsightsCard from './InsightsCard'
-import {
-  formatCurrency,
-  formatDateTime,
-  formatDuration,
-  modeBadge,
-  titleCase,
-} from '../lib/format'
-import { Badge, Btn, Card, EmptyState, Modal, TextInput } from './ui'
+import { formatCurrency, titleCase } from '../lib/format'
+import { Badge, Btn, Card, EmptyState, Modal, StatCard, TextInput } from './ui'
 import ReceiptModal, { frameReceipt, type ReceiptData } from './ReceiptModal'
-import { useSearchSeed } from '../lib/useSearchSeed'
-import type { FrameRecord, Settlement, Team } from '../types'
+import type { FrameRecord, Team } from '../types'
 
-function settlementLine(s: Settlement): string {
-  const bits: string[] = []
-  if ((s.walletPart ?? 0) > 0) bits.push(`wallet -${formatCurrency(s.walletPart)}`)
-  if ((s.cashPart ?? 0) > 0) bits.push(`cash ${formatCurrency(s.cashPart)}`)
-  if ((s.duePart ?? 0) > 0) bits.push(`due +${formatCurrency(s.duePart)}`)
-  return `${s.memberName}: ${bits.join(' + ') || 'no charge'}`
+function localDateKey(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+function todayDateKey(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+function frameDateTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).replace(',', ' ·')
+}
+
+function framePaymentAccent(frame: FrameRecord): 'due' | 'pass' | 'wallet' | 'paid' {
+  if (frame.dueAmount > 0 || frame.status === 'partial' || frame.status === 'unpaid') return 'due'
+  if (frame.passFramesUsed > 0 || frame.passTableCredit > 0) return 'pass'
+  if (frame.paymentMode === 'wallet' || frame.settlements.some((settlement) => (settlement.walletPart ?? 0) > 0)) {
+    return 'wallet'
+  }
+  return 'paid'
 }
 
 function WinnerModal({ frame, onClose }: { frame: FrameRecord; onClose: () => void }) {
@@ -56,8 +76,8 @@ function WinnerModal({ frame, onClose }: { frame: FrameRecord; onClose: () => vo
       width={420}
       footer={
         <>
-          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn variant="green" loading={busy} disabled={!valid} onClick={save}>Apply Correction</Btn>
+          <Btn variant="ghost" style={{height:"32px"}} onClick={onClose}>Cancel</Btn>
+          <Btn variant="green" style={{height:"32px"}} loading={busy} disabled={!valid} onClick={save}>Apply Correction</Btn>
         </>
       }
     >
@@ -102,26 +122,15 @@ function WinnerModal({ frame, onClose }: { frame: FrameRecord; onClose: () => vo
 
 export default function FramesScreen() {
   const { data } = useClub()
-  const [search, setSearch] = useState('')
-  useSearchSeed(setSearch)
-  const [month, setMonth] = useState('') // '' = all time
+  const [date, setDate] = useState(todayDateKey)
   const [winnerFrame, setWinnerFrame] = useState<FrameRecord | null>(null)
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
 
   const frames = data?.frames ?? []
-  const monthFiltered = useMemo(
-    () => (month ? frames.filter((f) => (f.createdAt ?? '').slice(0, 7) === month) : frames),
-    [frames, month],
+  const filtered = useMemo(
+    () => frames.filter((f) => localDateKey(f.createdAt) === date),
+    [frames, date],
   )
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return monthFiltered
-    return monthFiltered.filter((f) =>
-      [f.tableName, f.paymentMode, f.matchMode, ...(f.winners ?? []), ...(f.losers ?? []), ...(f.players ?? []).map((p) => p.label)]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q)),
-    )
-  }, [monthFiltered, search])
 
   const totals = useMemo(() => {
     const t = { count: filtered.length, total: 0, collected: 0, due: 0 }
@@ -135,97 +144,57 @@ export default function FramesScreen() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div className="row">
-          <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Filter by month" title="Filter by month" />
-          {month && (
-            <Btn size="sm" variant="ghost" onClick={() => setMonth('')}>All time</Btn>
-          )}
-        </div>
-        <div className="search-box">
-          <Search size={13} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Table, player, mode, winner…" aria-label="Search frames" />
-        </div>
+      <TextInput className="frame-date-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Filter frames by date" />
+
+
+     <div className="grid-stats">
+        {/* <StatCard label="Frames" value={String(totals.count)} tone="blue"  /> */}
+        <StatCard label="Billed" value={String(formatCurrency(totals.total))} tone="green" sub="for selected date" />
+        <StatCard label="Collected" value={String(formatCurrency(totals.collected))} tone="green" sub="paid against frame bills" />
+        <StatCard label="Due left" value={String(formatCurrency(totals.due))} tone="red" sub="remaining to collect" />
       </div>
-
-      {filtered.length > 0 && (
-        <div className="chip-row frames-totals">
-          <span className="chip">{totals.count} frame{totals.count === 1 ? '' : 's'}{month ? ` · ${month}` : ''}</span>
-          <span className="chip">billed <b>{formatCurrency(totals.total)}</b></span>
-          <span className="chip">collected <b className="money-green">{formatCurrency(totals.collected)}</b></span>
-          {totals.due > 0 && <span className="chip">due left <b className="money-red">{formatCurrency(totals.due)}</b></span>}
-        </div>
-      )}
-
-      <InsightsCard compact scopes={['live', 'revenue', 'members']} max={3} title="Smart Insights · Frames" />
 
       {filtered.length === 0 ? (
         <EmptyState title="No frames billed yet" hint="Confirm a table bill to see it here." />
       ) : (
         <div className="stack-sm">
           {filtered.map((f) => (
-            <Card key={f.id} className="frame-card">
-              <div className="bill-card-head">
-                <div className="pc-namerow">
+            <Card key={f.id} className={`frame-card frame-payment-${framePaymentAccent(f)}`}>
+              <div className="frame-card-heading">
+                <div className="frame-card-topline">
                   <span className="pc-name">{f.tableName}</span>
-                  <Badge kind={f.status === 'paid' ? 'green' : f.status === 'partial' ? 'blue' : 'red'}>{titleCase(f.status)}</Badge>
-                  <Badge kind="muted">{f.matchMode === '2v2' ? '2v2' : 'Solo'}</Badge>
-                  {f.winningTeam && <Badge kind="gold">Team {f.winningTeam} won</Badge>}
-                  <Badge kind="muted">{modeBadge(f.paymentMode)}</Badge>
+                  <div className="frame-card-badges">
+                    <Badge  kind="blue">{f.matchMode === '2v2' ? '2V2' : 'SOLO'}</Badge>
+                    <Badge kind={f.status === 'paid' ? 'green' : f.status === 'partial' ? 'blue' : 'red'}>{titleCase(f.status).toUpperCase()}</Badge>
+                  </div>
                 </div>
-                <div className="row">
-                  <span className="muted small">{formatDateTime(f.createdAt)} · {formatDuration(f.durationMinutes)}</span>
-                  <button className="btn-icon" aria-label="Print receipt" title="Print receipt" onClick={() => setReceipt(frameReceipt(f, data?.club.name ?? 'Club'))}>
-                    <Printer size={12} />
-                  </button>
-                  <Btn size="sm" variant="ghost" onClick={() => setWinnerFrame(f)}>
-                    <Repeat size={11} /> Change Winner
-                  </Btn>
-                </div>
+                <span className="muted small">{frameDateTime(f.startedAt)} → {frameDateTime(f.endedAt)}</span>
               </div>
 
-              <div className="chip-row">
-                {f.matchMode === '2v2' ? (
-                  <>
-                    <span className="chip team-A">A: {f.players.filter((p) => p.team === 'A').map((p) => p.label).join(' · ')}</span>
-                    <span className="chip team-B">B: {f.players.filter((p) => p.team === 'B').map((p) => p.label).join(' · ')}</span>
-                  </>
-                ) : (
-                  f.players.map((p) => (
-                    <span key={p.id} className={`chip${(f.winners ?? []).includes(p.label) ? ' chip-win' : ''}`}>{p.label}</span>
-                  ))
-                )}
+              <div className="frame-card-amounts">
+                <div className="bill-row total"><span>Frame total</span><b>{formatCurrency(f.totalAmount)}</b></div>
+                <div className="bill-row"><span>Collected now</span><b className="money-red">{formatCurrency(f.paidAmount)}</b></div>
               </div>
 
-              <div className="frame-lines muted small">
-                <span>Winner: <b className="money-green">{(f.winners ?? []).join(', ') || '—'}</b></span>
-                <span>Pays: <b className="money-red">{(f.losers ?? []).join(', ') || '—'}</b></span>
-                {(f.items ?? []).length > 0 && (
-                  <span>Items: {f.items.map((i) => `${i.name} x${i.qty}`).join(', ')}</span>
-                )}
-                {f.membershipDiscount > 0 && (
-                  <span>Premium -{formatCurrency(f.membershipDiscount)}{f.membershipMemberName ? ` (${f.membershipMemberName})` : ''}</span>
-                )}
-                {f.passTableCredit > 0 && <span>Pass -{formatCurrency(f.passTableCredit)} ({f.passMemberName})</span>}
-                {(f.oldDueAmount ?? 0) > 0 && <span>Old due {formatCurrency(f.oldDueAmount)}</span>}
-                {(f.advancePaid ?? 0) > 0 && <span>Advance {formatCurrency(f.advancePaid)} applied</span>}
+              <div className="chip-row frame-players">
+                {f.players.map((p) => {
+                  const isWinner = (f.winners ?? []).includes(p.label)
+                  return (
+                    <span key={p.id} className={`chip${isWinner ? ' chip-win' : ''}${p.team ? ` team-${p.team}` : ''}`}>
+                      {isWinner && <Crown size={12} aria-hidden="true" />}
+                      {p.label}
+                    </span>
+                  )
+                })}
               </div>
 
-              {(f.settlements ?? []).length > 0 && (
-                <div className="frame-settlements">
-                  {f.settlements.map((s, i) => (
-                    <span key={i} className="small">{settlementLine(s)}</span>
-                  ))}
-                </div>
-              )}
-
-              <div className="bill-rows compact">
-                <div className="bill-row"><span>Table</span><b>{formatCurrency(f.tableAmount)}</b></div>
-                {f.itemsAmount > 0 && <div className="bill-row"><span>Items</span><b>{formatCurrency(f.itemsAmount)}</b></div>}
-                {(f.gloveCharges ?? 0) > 0 && <div className="bill-row"><span>Gloves not returned</span><b>+{formatCurrency(f.gloveCharges)}</b></div>}
-                <div className="bill-row total"><span>Total</span><b>{formatCurrency(f.totalAmount)}</b></div>
-                <div className="bill-row"><span>Paid</span><b className="money-green">{formatCurrency(f.paidAmount)}</b></div>
-                {f.dueAmount > 0 && <div className="bill-row neg"><span>Due</span><b>{formatCurrency(f.dueAmount)}</b></div>}
+              <div className="frame-card-actions">
+                <Btn size="sm" variant="outline" aria-label={`Print receipt for ${f.tableName}`} onClick={() => setReceipt(frameReceipt(f, data?.club.name ?? 'Club'))}>
+                  <Printer size={12} /> Receipt
+                </Btn>
+                <Btn size="sm" variant="outline" className="frame-fix-winner" aria-label={`Fix winner for ${f.tableName}`} onClick={() => setWinnerFrame(f)}>
+                  <Repeat size={11} /> Fix winner
+                </Btn>
               </div>
             </Card>
           ))}

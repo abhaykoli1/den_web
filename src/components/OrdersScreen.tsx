@@ -2,7 +2,7 @@
 // GET /clubs/{id}/orders · search + status filter · tone-coded status badges.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Search, ShoppingBag } from 'lucide-react'
-import { api, ApiError, asArray } from '../lib/api'
+import { api, ApiError, asArray, isRecord } from '../lib/api'
 import { useClub } from '../context/ClubContext'
 import { Badge, Btn, Card, EmptyState, FullLoader, Seg, StatCard } from './ui'
 import { formatCurrency, formatDateTime } from '../lib/format'
@@ -44,8 +44,8 @@ export default function OrdersScreen() {
     setLoading(true)
     setError(null)
     try {
-      const res = await api<any>(`/clubs/${club.id}/orders`)
-      const raw = Array.isArray(res) ? res : res?.orders
+      const res = await api<unknown>(`/clubs/${club.id}/orders`)
+      const raw = Array.isArray(res) ? res : isRecord(res) ? res.orders : []
       setOrders(asArray<MemberOrder>(raw))
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Orders could not load')
@@ -86,7 +86,7 @@ export default function OrdersScreen() {
       </div>
 
       <div className="row wrap" style={{ alignItems: 'center' }}>
-        <span className="search-box">
+        <span className="search-box orders-search">
           <Search size={14} />
           <input
             value={query}
@@ -116,9 +116,11 @@ export default function OrdersScreen() {
       ) : error ? (
         <Card>
           <EmptyState title="Orders could not load" hint={error} icon={<ShoppingBag size={22} />} />
-          <Btn variant="outline" className="mt" onClick={() => void load()}>
-            <RefreshCw size={12} /> Try again
-          </Btn>
+          <div className="orders-retry">
+            <Btn variant="outline" onClick={() => void load()}>
+              <RefreshCw size={12} /> Try again
+            </Btn>
+          </div>
         </Card>
       ) : visible.length === 0 ? (
         <Card>

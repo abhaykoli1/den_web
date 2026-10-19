@@ -37,7 +37,7 @@ export default function SupportScreen() {
 
   useEffect(() => {
     let alive = true
-    api('/platform/support')
+    api<SupportContact>('/platform/support')
       .then((c) => { if (alive && c) setContact({ email: c.email ?? '', phone: c.phone ?? '' }) })
       .catch(() => { /* the empty state below covers it */ })
       .finally(() => { if (alive) setLoading(false) })

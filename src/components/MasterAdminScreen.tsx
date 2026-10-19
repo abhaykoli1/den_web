@@ -40,6 +40,11 @@ interface Overview {
   clubs: Club[]
 }
 
+interface SupportContact {
+  email: string
+  phone: string
+}
+
 // ----------------------------------------------------------- plan modal
 
 function SellerPlanModal({ open, onClose, plan, onSaved }: {
@@ -365,12 +370,12 @@ export default function MasterAdminScreen() {
     setLoading(true)
     try {
       const [ov, sp, mo, ct] = await Promise.all([
-        api('/master/overview'),
-        api('/subscription-plans'),
-        api('/master/mailouts'),
-        api('/platform/support'),
+        api<Overview>('/master/overview'),
+        api<SaaSPlan[]>('/subscription-plans'),
+        api<Mailout[]>('/master/mailouts'),
+        api<SupportContact>('/platform/support'),
       ])
-      setOverview(ov as Overview)
+      setOverview(ov)
       setPlans(asArray<SaaSPlan>(sp))
       setMails(asArray<Mailout>(mo))
       setContactEmail(ct?.email ?? '')
@@ -400,7 +405,7 @@ export default function MasterAdminScreen() {
   const saveContact = async () => {
     setContactBusy(true)
     try {
-      const saved = await api('/platform/support', {
+      const saved = await api<SupportContact>('/platform/support', {
         method: 'PATCH',
         body: { email: contactEmail.trim(), phone: contactPhone.trim() },
       })
@@ -459,9 +464,9 @@ export default function MasterAdminScreen() {
 
   return (
     <div className="stack">
-      <div className="page-head">
-        <div className="row">
-          <div className="search-box">
+      <div className="page-head master-search-head">
+        <div className="row master-search-row">
+          <div className="search-box master-search-box">
             <Search size={13} />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, email, user/club ID" aria-label="Search accounts" />
           </div>

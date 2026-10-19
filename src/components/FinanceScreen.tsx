@@ -93,6 +93,7 @@ export default function FinanceScreen() {
 
   return (
     <div className="stack">
+      <InsightsCard month={month} finance={fin} scopes={['finance', 'expenses', 'stock', 'revenue']} max={6} />
       <div className="page-head">
         <div className="row">
           <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value || monthKey())} aria-label="Month" />
@@ -119,8 +120,6 @@ export default function FinanceScreen() {
         />
         <StatCard label="Stock Profit" tone="gold" value={formatCurrency(fin?.stock.totalProfit ?? 0)} sub={`sold ${fin?.stock.items.reduce((s, i) => s + i.qtySold, 0) ?? 0} pcs`} />
       </div>
-
-      <InsightsCard month={month} finance={fin} scopes={['finance', 'expenses', 'stock', 'revenue']} max={6} />
 
       <div className="finance-grid">
         {/* ---------------- P&L sheet ---------------- */}

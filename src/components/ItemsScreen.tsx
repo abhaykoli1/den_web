@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CloudOff, ImagePlus, ImageOff, PackagePlus, Pencil, Plus, Receipt, RefreshCw, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { CloudOff, PackagePlus, Pencil, Plus, Receipt, RefreshCw, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useClub } from '../context/ClubContext'
 import { useToast } from '../context/ToastContext'
@@ -12,10 +12,12 @@ import {
   EmptyState,
   Field,
   Modal,
+  Seg,
   Select,
   TextInput,
 } from './ui'
 import InsightsCard from './InsightsCard'
+import { MenuCategoryField, CategoryIcon, defaultCategoryIcon, type MenuCategoryIcon } from './MenuCategoryField'
 import {
   enqueueBill,
   isOfflineError,
@@ -25,7 +27,7 @@ import {
 } from '../lib/offlineQueue'
 import { api, ApiError } from '../lib/api'
 import ReceiptModal, { itemBillReceipt, type ReceiptData } from './ReceiptModal'
-import type { ItemBill, MenuItem, PaymentMode } from '../types'
+import type { ItemBill, MenuItem } from '../types'
 
 // ================================================================
 // BACKEND-FIX SUMMARY (is file me 7 spots — pehle page blank tha):
@@ -41,8 +43,6 @@ import type { ItemBill, MenuItem, PaymentMode } from '../types'
 //     insufficient balance pe create block + hint
 //  5. due rule: poora amount member ke due me jata hai (partial paid nahi;
 //     baad me Due Desk se collect ya mark-paid)
-//  6. mixed mode: payments[] [{mode,amount}] ka sum EXACTLY total hona
-//     chahiye — chhota split editor add kiya, mismatch pe block
 //  7. create item: unit null bhejne se backend 400 deta hai → default 'pc'
 // ================================================================
 
@@ -52,36 +52,14 @@ function ItemModal({ open, onClose, item }: { open: boolean; onClose: () => void
   const { mutate } = useClub()
   const [name, setName] = useState(item?.name ?? '')
   const [category, setCategory] = useState(item?.category ?? 'Cafe')
+  const [categoryIcon, setCategoryIcon] = useState<MenuCategoryIcon>(() => item?.categoryIcon ?? defaultCategoryIcon(item?.category ?? 'Cafe'))
   const [price, setPrice] = useState(String(item?.price ?? ''))
   const [costPrice, setCostPrice] = useState(String(item?.costPrice ?? '0'))
   const [stockQty, setStockQty] = useState(String(item?.stockQty ?? '0'))
   const [reorderLevel, setReorderLevel] = useState(String(item?.reorderLevel ?? '5'))
   const [unit, setUnit] = useState(item?.unit ?? '')
   const [active, setActive] = useState(item?.active ?? true)
-  // den_app items_screen.dart → _productImagePicker: product photo per item.
-  const [image, setImage] = useState<string | null | undefined>(undefined)
-  const imgRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
-  const preview = image !== undefined ? image : item?.image ?? null
-
-  const pickImage = (file: File | undefined) => {
-    if (!file || !file.type.startsWith('image/')) return
-    const img = new Image()
-    img.onload = () => {
-      const MAX = 320
-      const scale = Math.min(1, MAX / Math.max(img.width, img.height))
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, Math.round(img.width * scale))
-      canvas.height = Math.max(1, Math.round(img.height * scale))
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      setImage(canvas.toDataURL('image/png'))
-      URL.revokeObjectURL(img.src)
-    }
-    img.onerror = () => URL.revokeObjectURL(img.src)
-    img.src = URL.createObjectURL(file)
-  }
 
   const save = async () => {
     if (!name.trim()) return
@@ -91,6 +69,7 @@ function ItemModal({ open, onClose, item }: { open: boolean; onClose: () => void
     const body: Record<string, unknown> = {
       name: name.trim(),
       category: category.trim() || 'Cafe',
+      categoryIcon,
       price: parseNum(price),
       costPrice: parseNum(costPrice),
       reorderLevel: Math.max(0, Math.floor(parseNum(reorderLevel, 5))),
@@ -101,7 +80,6 @@ function ItemModal({ open, onClose, item }: { open: boolean; onClose: () => void
         : { unit: unit.trim() || 'pc' }),
       active,
     }
-    if (image !== undefined) body.image = image ?? ''
     if (!item) body.stockQty = Math.max(0, Math.floor(parseNum(stockQty)))
     const r = item
       ? await mutate(`menu-items/${item.id}`, { method: 'PATCH', body, toast: 'Menu item updated' })
@@ -125,26 +103,11 @@ function ItemModal({ open, onClose, item }: { open: boolean; onClose: () => void
         </>
       }
     >
-      {/* product photo — den_app item sheet parity */}
-      <div className="logo-row" style={{ marginBottom: 10 }}>
-        <div className="logo-preview" style={{ width: 54, height: 54 }}>
-          {preview ? <img src={preview} alt={name || 'Item'} /> : <span className="logo-empty"><ImageOff size={16} /></span>}
-        </div>
-        <div className="stack-xs">
-          <input ref={imgRef} type="file" accept="image/*" className="hidden-file" onChange={(e) => pickImage(e.target.files?.[0])} />
-          <Btn size="sm" variant="outline" onClick={() => imgRef.current?.click()}>
-            <ImagePlus size={12} /> {preview ? 'Change photo' : 'Add photo'}
-          </Btn>
-          {preview && (
-            <Btn size="sm" variant="ghost" className="danger-text" onClick={() => setImage(null)}>
-              <X size={12} /> Remove photo
-            </Btn>
-          )}
-        </div>
-      </div>
       <div className="form-grid two">
         <Field label="Name"><TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
-        <Field label="Category"><TextInput value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Cafe / Snacks / Drinks" /></Field>
+        <Field label="Category">
+          <MenuCategoryField category={category} icon={categoryIcon} onCategoryChange={setCategory} onIconChange={setCategoryIcon} />
+        </Field>
         <Field label="Selling Price *"><TextInput inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="40" /></Field>
         <Field label="Purchase ₹/piece" hint="cost — used for profit tracking">
           <TextInput inputMode="decimal" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="15" />
@@ -233,9 +196,7 @@ export default function ItemsScreen() {
   const [customer, setCustomer] = useState('')
   const [memberId, setMemberId] = useState('')
   const [discount, setDiscount] = useState('0')
-  const [mode, setMode] = useState<PaymentMode>('cash')
-  // BACKEND-FIX 6: mixed mode split (sum must equal total exactly)
-  const [mix, setMix] = useState({ cash: '', upi: '', card: '' })
+  const [mode, setMode] = useState<'cash' | 'upi' | 'wallet' | 'due'>('cash')
   const [busy, setBusy] = useState(false)
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
   // ★ den_app offline_queue.dart — counter sales queue + auto-sync
@@ -288,13 +249,7 @@ export default function ItemsScreen() {
   //  cash/upi/card → FULL payment auto (paid:true), koi partial nahi
   //  wallet        → member ka wallet FULL total cover kare (warna 400)
   //  due           → poora total member ke due me (paid:false)
-  //  mixed         → payments[] ka sum EXACTLY total
   const walletShort = mode === 'wallet' && !!member && member.walletBalance < total
-  const mixParts = (['cash', 'upi', 'card'] as const)
-    .map((k) => ({ mode: k, amount: parseNum(mix[k]) }))
-    .filter((p) => p.amount > 0)
-  const mixSum = mixParts.reduce((s, p) => s + p.amount, 0)
-  const mixMismatch = mode === 'mixed' && Math.round(mixSum * 100) !== Math.round(total * 100)
 
   const estProfit = selected.reduce((s, m) => s + (qty[m.id] ?? 0) * Math.max(0, m.price - m.costPrice), 0) - discountNum
 
@@ -303,8 +258,7 @@ export default function ItemsScreen() {
     total > 0 &&
     !!(customer.trim() || member) &&
     ((mode !== 'wallet' && mode !== 'due') || !!member) &&
-    !walletShort &&
-    !mixMismatch
+    !walletShort
 
   const bump = (id: string, delta: number) =>
     setQty((q) => {
@@ -330,10 +284,10 @@ export default function ItemsScreen() {
       toast.error(`Wallet balance short — ${formatCurrency(member?.walletBalance ?? 0)} available, full cover chahiye`)
       return
     }
-    if (mixMismatch) {
-      toast.error(`Mixed payments ka total ${formatCurrency(total)} hona chahiye (abhi ${formatCurrency(mixSum)})`)
-      return
-    }
+    // if (mixMismatch) {
+    //   toast.error(`Mixed payments ka total ${formatCurrency(total)} hona chahiye (abhi ${formatCurrency(mixSum)})`)
+    //   return
+    // }
     const billName = customer.trim() || member?.name || ''
     const payload = {
       customerName: billName,
@@ -343,8 +297,6 @@ export default function ItemsScreen() {
       discount: discountNum,
       // BACKEND-FIX 3: `mode` (paymentMode backend ignore karta tha)
       mode,
-      // BACKEND-FIX 6: mixed payments[] — sum exactly total
-      ...(mode === 'mixed' ? { payments: mixParts } : {}),
       // paidAmount/notes backend pe nahi jaate (ItemBillIn me fields nahi hain)
     }
     setBusy(true)
@@ -364,7 +316,6 @@ export default function ItemsScreen() {
         setQty({})
         setCustomer('')
         setDiscount('0')
-        setMix({ cash: '', upi: '', card: '' })
         return
       }
       toast.error(e instanceof ApiError ? e.message : 'Could not create the bill')
@@ -378,7 +329,6 @@ export default function ItemsScreen() {
       setQty({})
       setCustomer('')
       setDiscount('0')
-      setMix({ cash: '', upi: '', card: '' })
     }
   }
 
@@ -392,28 +342,27 @@ export default function ItemsScreen() {
 
   return (
     <div className="stack">
+      <InsightsCard scopes={['stock']} max={4} title="Smart Insights · Stock" />
       <div className="page-head">
-        <div className="row">
+        <div className="row items-header-row">
           {queued > 0 && (
             <Btn variant="gold" size="sm" loading={syncing} onClick={() => void runSync()} title="Replay offline bills">
               <CloudOff size={12} /> {queued} pending <RefreshCw size={11} />
             </Btn>
           )}
-          <button className="btn-icon" aria-label="All Item Bills" title="All Item Bills" onClick={() => navigate('/item-bills')}>
-            <Receipt size={15} />
-          </button>
-          <Btn variant="green" onClick={() => setItemModal({ item: null })}>
+          <Btn variant="outline" style={{height:"32px"}} size="sm" className="items-header-action header-action" aria-label="All Item Bills" onClick={() => navigate('/item-bills')}>
+            <Receipt size={15} /> Items Bills
+          </Btn>
+          <Btn variant="outline" size="sm" style={{height:"32px"}} className="items-header-action header-action" onClick={() => setItemModal({ item: null })}>
             <Plus size={13} /> Add Menu Item
           </Btn>
         </div>
       </div>
 
-      <InsightsCard scopes={['stock']} max={4} title="Smart Insights · Stock" />
-
       <div className="items-layout">
         {/* ---------- New Item Bill ---------- */}
         <Card className="new-bill">
-          <div className="section-title">New Item Bill</div>
+          {/* <div className="section-title">New Item Bill</div> */}
           {activeItems.length === 0 ? (
             <EmptyState title="No menu items" hint="Add items to start billing." />
           ) : (
@@ -429,7 +378,7 @@ export default function ItemsScreen() {
                     title={out ? 'Out of stock — restock from the menu list' : `${m.stockQty} in stock`}
                     onClick={() => bump(m.id, 1)}
                   >
-                    <Plus size={10} />
+                    <CategoryIcon icon={m.categoryIcon ?? defaultCategoryIcon(m.category ?? 'Cafe')} size={14} />
                     <span className="item-chip-name">{m.name}</span>
                     <span className="money-gold">{formatCurrency(m.price)}</span>
                     <span className={`stock-pill${out ? ' zero' : m.stockQty <= (m.reorderLevel ?? 5) ? ' low' : ''}`} title={`Low-stock alert at ≤${m.reorderLevel ?? 5}`}>{m.stockQty}</span>
@@ -458,10 +407,11 @@ export default function ItemsScreen() {
 
           <div className="form-grid two">
             <Field label={member ? 'Customer Name (from member)' : 'Customer Name *'}>
-              <TextInput value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Walk-in customer" />
+              <TextInput style={{fontSize:"12px"}} value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Walk-in customer" />
             </Field>
             <Field label="Member (optional — enables wallet/due)">
               <Select
+              style={{fontSize:"12px"}}
                 value={memberId}
                 onChange={(e) => {
                   const id = e.target.value
@@ -482,17 +432,22 @@ export default function ItemsScreen() {
               </Select>
             </Field>
             <Field label="Discount">
-              <TextInput inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
+              <TextInput style={{fontSize:"12px"}} inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
             </Field>
             <Field label="Payment Mode">
-              <Select value={mode} onChange={(e) => setMode(e.target.value as PaymentMode)}>
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="card">Card</option>
-                <option value="wallet">Wallet (member)</option>
-                <option value="due">Due (member)</option>
-                <option value="mixed">Mixed</option>
-              </Select>
+              <div className="item-payment-mode">
+                <Seg
+                  value={mode}
+                  onChange={setMode}
+                  ariaLabel="Payment mode"
+                  options={[
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'upi', label: 'UPI' },
+                    { value: 'wallet', label: 'Wallet' },
+                    { value: 'due', label: 'Due' },
+                  ]}
+                />
+              </div>
             </Field>
           </div>
 
@@ -501,7 +456,7 @@ export default function ItemsScreen() {
             walletShort ? (
               <p className="small" style={{ color: 'var(--red, #ff5544)' }}>
                 Wallet balance {formatCurrency(member.walletBalance)} — full {formatCurrency(total)} cover nahi kar paayega.
-                Due ya Mixed mode use karo (partial wallet backend allow nahi karta).
+                Due mode use karo (partial wallet backend allow nahi karta).
               </p>
             ) : (
               <p className="small money-gold">Wallet se poora {formatCurrency(total)} katega · balance {formatCurrency(member.walletBalance)}.</p>
@@ -512,28 +467,6 @@ export default function ItemsScreen() {
           {mode === 'due' && member && (
             <p className="small" style={{ color: 'var(--gold, #e0b34c)' }}>
               Poora {formatCurrency(total)} {member.name} ke due me jayega — collect baad me Due Desk se (ya mark-paid).
-            </p>
-          )}
-
-          {/* BACKEND-FIX 6: mixed split editor */}
-          {mode === 'mixed' && (
-            <div className="form-grid two" style={{ margin: '6px 0' }}>
-              {(['cash', 'upi', 'card'] as const).map((k) => (
-                <Field key={k} label={`${k.toUpperCase()} ₹`}>
-                  <TextInput
-                    inputMode="decimal"
-                    value={mix[k]}
-                    onChange={(e) => setMix((s) => ({ ...s, [k]: e.target.value }))}
-                    placeholder="0"
-                  />
-                </Field>
-              ))}
-            </div>
-          )}
-          {mode === 'mixed' && (
-            <p className="small" style={{ color: mixMismatch ? 'var(--red, #ff5544)' : 'var(--green, #35d07f)' }}>
-              Mixed sum {formatCurrency(mixSum)} / {formatCurrency(total)}
-              {mixMismatch ? ' — total ke barabar hona chahiye' : ' ✓'}
             </p>
           )}
 
@@ -554,18 +487,13 @@ export default function ItemsScreen() {
         {/* ---------- Menu management ---------- */}
         <div className="stack-sm">
           <div className="section-title">Menu · {menuItems.length} items</div>
-          {grouped.length === 0 && <EmptyState title="No menu items yet" hint="Add tea, cold drinks, snacks…" />}
+          {grouped.length === 0 && <EmptyState title="No menu items yet" hint="Add momo, burgers, pizza, cold drinks, patties…" />}
           {grouped.map(([cat, items]) => (
             <Card key={cat} className="menu-group">
-              <div className="menu-cat">{titleCase(cat)}</div>
+              <div className="menu-cat"><CategoryIcon icon={items[0]?.categoryIcon ?? defaultCategoryIcon(cat)} size={13} />{titleCase(cat)}</div>
               <div className="menu-list">
                 {items.map((m) => (
                   <div key={m.id} className={`menu-row${m.active ? '' : ' inactive'}`}>
-                    {m.image ? (
-                      <img className="item-thumb" src={m.image} alt={m.name} />
-                    ) : (
-                      <span className="item-thumb item-thumb-empty"><ImageOff size={13} /></span>
-                    )}
                     <span className="menu-name">
                       {m.name}
                       {m.unit && <span className="muted small"> · {m.unit}</span>}

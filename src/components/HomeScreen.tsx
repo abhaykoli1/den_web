@@ -115,7 +115,7 @@ export default function HomeScreen() {
 
   return (
     <div className="stack">
-      <div className="home-greet-row">
+      <div className="home-greet-row" style={{ paddingTop:10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 className="home-greet">
             Good {timeGreeting()}, {first || 'there'}

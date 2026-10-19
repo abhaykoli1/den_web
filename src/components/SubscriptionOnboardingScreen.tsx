@@ -20,7 +20,7 @@ export default function SubscriptionOnboardingScreen() {
   const pending = sub && sub.status !== 'trial' && sub.status !== 'active'
 
   useEffect(() => {
-    api('/subscription-plans')
+    api<unknown>('/subscription-plans')
       .then((p) => setPlans(asArray<SaaSPlan>(p)))
       .catch((e) => setError(e instanceof ApiError ? e.message : 'Could not load plans'))
   }, [])

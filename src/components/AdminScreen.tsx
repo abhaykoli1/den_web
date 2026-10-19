@@ -86,6 +86,7 @@ export default function AdminScreen() {
 
   return (
     <div className="stack">
+      <InsightsCard month={month} report={report} />
       <div className="page-head">
         <div className="row">
           <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value || monthKey())} aria-label="Month" />
@@ -108,9 +109,6 @@ export default function AdminScreen() {
         <StatCard label="Tournaments" tone="blue" value={formatCurrency(st?.tournaments ?? 0)} sub={`${report?.counts.tournaments ?? 0} entry fees`} />
         <StatCard label="Month Total" tone="green" value={formatCurrency(report?.totalEarnings ?? 0)} sub={report?.month ?? month} />
       </div>
-
-      {/* Smart Insights reads the books ABOVE the raw transaction list */}
-      <InsightsCard month={month} report={report} />
 
       <Card>
         <div className="section-title">Transactions</div>

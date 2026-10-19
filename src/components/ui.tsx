@@ -6,22 +6,10 @@ export function Spinner({ size = 14 }: { size?: number }) {
   return <Loader2 className="spin" size={size} aria-label="Loading" />
 }
 
-/** Bouncing billiard 8-ball — the house loading mascot (replaces spinners on full-page loads). */
-export function EightBallLoader({ size = 46 }: { size?: number }) {
-  return (
-    <div className="eb-wrap" role="status" aria-label="Loading">
-      <div className="eightball" style={{ width: size, height: size }}>
-        <span className="eightball-num" style={{ fontSize: Math.max(11, size * 0.3) }}>8</span>
-      </div>
-      <div className="eb-shadow" style={{ width: size * 0.8 }} />
-    </div>
-  )
-}
-
 export function FullLoader({ label = '' }: { label?: string }) {
   return (
-    <div className="full-loader">
-      <EightBallLoader />
+    <div className="full-loader" role="status" aria-label={label || 'Loading'}>
+      <Spinner size={32} />
       {label ? <span className="small muted">{label}</span> : null}
     </div>
   )
@@ -124,7 +112,7 @@ export function Modal({ open, onClose, title, width = 460, children, footer }: M
       <div className="modal" style={{ maxWidth: width }} role="dialog" aria-modal="true">
         <div className="modal-head">
           <div className="modal-title">{title}</div>
-          <button className="btn-icon" aria-label="Close" onClick={onClose}>
+          <button className="btn-icon modal-close" aria-label="Close" onClick={onClose}>
             <X size={14} />
           </button>
         </div>
@@ -179,6 +167,7 @@ export function Seg<T extends string>({ options, value, onChange, ariaLabel }: {
           key={o.value}
           type="button"
           className={`seg-btn${value === o.value ? ' active' : ''}`}
+          aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
         >
           {o.label}

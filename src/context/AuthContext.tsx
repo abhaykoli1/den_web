@@ -11,26 +11,12 @@ import {
 import { api, ApiError } from '../lib/api'
 import { clearToken, getToken, setToken } from '../lib/storage'
 import { useToast } from './ToastContext'
-import type { AccountSubscription, AppUser } from '../types'
+import { hasAppAccess, subscriptionOk } from '../lib/accessPolicy'
+import type { AppUser } from '../types'
 
 export type AuthStatus = 'loading' | 'guest' | 'authed'
 
-/** Client-side mirror of the backend subscription gate (backend enforces). */
-export function subscriptionOk(sub?: AccountSubscription | null): boolean {
-  if (!sub) return false
-  if (sub.status !== 'trial' && sub.status !== 'active') return false
-  if (sub.expiresAt) {
-    const t = new Date(sub.expiresAt).getTime()
-    if (Number.isFinite(t) && t <= Date.now()) return false
-  }
-  return true
-}
-
-export function hasAppAccess(user: AppUser | null): boolean {
-  if (!user) return false
-  if (user.role === 'master') return true
-  return subscriptionOk(user.subscription)
-}
+export { hasAppAccess, subscriptionOk }
 
 interface AuthCtx {
   status: AuthStatus

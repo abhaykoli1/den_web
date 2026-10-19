@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRightLeft, Banknote, Hand, Play, Plus, RotateCcw, Search, Square, StickyNote, UserPlus } from 'lucide-react'
+import { ArrowRightLeft, Banknote, Hand, IndianRupee, Minus, Pencil, Play, Plus, RotateCcw, Square, StickyNote, UserPlus } from 'lucide-react'
 import { useClub } from '../context/ClubContext'
 import { useToast } from '../context/ToastContext'
 import {
@@ -15,8 +15,9 @@ import {
   peakWindowActive,
   planValid,
 } from '../lib/format'
-import { Badge, Btn, Card, EmptyState, Field, Modal, Seg, Select, StatCard, TextArea, TextInput } from './ui'
+import { Badge, Btn, Card, EmptyState, Field, Modal, Seg, Select, TextArea, TextInput } from './ui'
 import InsightsCard from './InsightsCard'
+import { CategoryIcon, defaultCategoryIcon } from './MenuCategoryField'
 import ReceiptModal, { frameReceipt, type ReceiptData } from './ReceiptModal'
 import type {
   ActiveSession,
@@ -42,11 +43,14 @@ function FreeCard({ table }: { table: ClubTable }) {
   const [count, setCount] = useState(2)
   const [seats, setSeats] = useState<Seat[]>([])
   const [gloveSeats, setGloveSeats] = useState<number[]>([])
+  const [advance, setAdvance] = useState('')
+  const [notes, setNotes] = useState('')
+  const [confirmStart, setConfirmStart] = useState(false)
   const [busy, setBusy] = useState(false)
   const glovePrice = table.rate.glovePrice ?? 0
 
   useEffect(() => {
-    const n = mode === '2v2' ? 4 : count
+    const n = mode === '2v2' ? Math.max(4, count) : count
     setSeats((prev) =>
       Array.from({ length: n }, (_, i) => {
         const old = prev[i]
@@ -71,9 +75,23 @@ function FreeCard({ table }: { table: ClubTable }) {
   const toggleGloveSeat = (i: number) =>
     setGloveSeats((list) => (list.includes(i) ? list.filter((x) => x !== i) : [...list, i]))
 
-  const start = async () => {
-    if (mode === '2v2' && (teamCount('A') !== 2 || teamCount('B') !== 2)) {
-      toast.error('2v2 needs exactly two players in Team A and two in Team B')
+  const start = () => {
+    const memberIds = seats.map((seat) => seat.memberId).filter((id): id is string => Boolean(id))
+    if (memberIds.length !== new Set(memberIds).size) {
+      toast.error('The same member cannot occupy two seats — make one seat a guest')
+      return
+    }
+    if (mode === '2v2' && (teamCount('A') === 0 || teamCount('B') === 0)) {
+      toast.error('For 2v2, Team A and Team B must each have at least one player')
+      return
+    }
+    setConfirmStart(true)
+  }
+
+  const beginStart = async () => {
+    setConfirmStart(false)
+    if (mode === '2v2' && (teamCount('A') === 0 || teamCount('B') === 0)) {
+      toast.error('For 2v2, Team A and Team B must each have at least one player')
       return
     }
     setBusy(true)
@@ -88,6 +106,8 @@ function FreeCard({ table }: { table: ClubTable }) {
         tableId: table.id,
         matchMode: mode,
         players,
+        advancePaid: parseNum(advance),
+        notes: notes.trim(),
         ...(glovePrice > 0 && gloveSeats.length > 0
           ? { gloveSeatIndexes: gloveSeats.filter((i) => i < seats.length) }
           : {}),
@@ -98,6 +118,8 @@ function FreeCard({ table }: { table: ClubTable }) {
     if (r) {
       setSeats([])
       setGloveSeats([])
+      setAdvance('')
+      setNotes('')
     }
   }
 
@@ -126,7 +148,11 @@ function FreeCard({ table }: { table: ClubTable }) {
         <Seg
           ariaLabel="Match mode"
           value={mode}
-          onChange={(v) => setMode(v as MatchMode)}
+          onChange={(v) => {
+            const nextMode = v as MatchMode
+            setMode(nextMode)
+            if (nextMode === '2v2') setCount((current) => Math.max(4, current))
+          }}
           options={[
             { value: 'solo', label: 'Solo' },
             { value: '2v2', label: '2v2' },
@@ -137,11 +163,10 @@ function FreeCard({ table }: { table: ClubTable }) {
             ariaLabel="Player count"
             value={String(count)}
             onChange={(v) => setCount(parseInt(v, 10))}
-            options={[
-              { value: '2', label: '2P' },
-              { value: '3', label: '3P' },
-              { value: '4', label: '4P' },
-            ]}
+            options={Array.from({ length: 5 }, (_, i) => {
+              const players = i + 2
+              return { value: String(players), label: `${players}P` }
+            })}
           />
         )}
       </div>
@@ -155,6 +180,7 @@ function FreeCard({ table }: { table: ClubTable }) {
               <Select
                 value={seat.memberId ?? ''}
                 aria-label={`Player ${i + 1}`}
+                style={{height:"32px"}}
                 onChange={(e) =>
                   setSeats((list) =>
                     list.map((s, j) =>
@@ -168,10 +194,11 @@ function FreeCard({ table }: { table: ClubTable }) {
                 <option value="">Guest</option>
                 {members.map((m) => (
                   <option
+
                     key={m.id}
                     value={m.id}
                     disabled={others.has(m.id)}
-                    style={m.dueAmount > 0 ? { color: 'var(--accent-red)', fontWeight: 700 } : undefined}
+                    style={ m.dueAmount > 0 ? { color: 'var(--accent-red)', fontWeight: 700 , } : undefined}
                   >
                     {m.name}
                     {m.dueAmount > 0 ? ` (due ${formatCurrency(m.dueAmount)})` : ''}
@@ -180,6 +207,7 @@ function FreeCard({ table }: { table: ClubTable }) {
               </Select>
               {!seat.memberId && (
                 <TextInput
+                style={{height:"32px"}}
                   value={seat.guestName}
                   placeholder={`Guest ${i + 1}`}
                   aria-label={`Guest name ${i + 1}`}
@@ -207,12 +235,18 @@ function FreeCard({ table }: { table: ClubTable }) {
           )
         })}
       </div>
+      {/* {seats.length < 8 && (
+        <Btn size="sm" variant="ghost" onClick={() => setCount((current) => Math.min(8, Math.max(current, seats.length) + 1))}>
+          <Plus size={12} /> Add seat
+        </Btn>
+      )} */}
 
       {/* glove assignment — price set per table in Settings */}
       {glovePrice > 0 && (
         <div className="stack-xs">
           <span className="field-label">
-            Gloves · {formatCurrency(glovePrice)}/piece — added to the frame bill if not returned
+            Gloves · {formatCurrency(glovePrice)}/piece
+            {/* — added to the frame bill if not returned */}
           </span>
           <div className="chip-row">
             {seats.map((s, i) => (
@@ -230,9 +264,35 @@ function FreeCard({ table }: { table: ClubTable }) {
         </div>
       )}
 
-      <Btn variant="green" className="btn-block" loading={busy} onClick={start}>
+      <div className="form-grid two">
+        <Field label="Advance ₹ (optional)">
+          <TextInput inputMode="decimal" style={{height:"32px"}} value={advance} onChange={(e) => setAdvance(e.target.value)} placeholder={String(data?.club.settings.defaultAdvance || 0)} />
+        </Field>
+        {/* <Field label="Note (optional)">
+          <TextInput value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={300} placeholder="e.g. league night" />
+        </Field> */}
+      </div>
+
+      <Btn variant="green" style={{height:"32px"}} className="btn-block" loading={busy} onClick={start}>
         <Play size={13} /> Start Game · {formatCurrency(rate)}/hr
       </Btn>
+      <Modal
+        open={confirmStart}
+        onClose={() => setConfirmStart(false)}
+        title="Start timer?"
+        width={360}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setConfirmStart(false)}>Cancel</Btn>
+            <Btn variant="green"  loading={busy} onClick={() => void beginStart()}><Play size={12} /> Start timer</Btn>
+          </>
+        }
+      >
+        <p className="muted small">
+          Start {table.name} for {seats.map(seatLabel).join(', ')} at {formatCurrency(rate)}/hr?
+          {parseNum(advance) > 0 ? ` Advance: ${formatCurrency(parseNum(advance))}.` : ''}
+        </p>
+      </Modal>
     </Card>
   )
 }
@@ -241,11 +301,72 @@ function FreeCard({ table }: { table: ClubTable }) {
 
 // ------------------------------------------------------- quick actions
 
+function SessionItemsModal({ session, onClose }: { session: ActiveSession; onClose: () => void }) {
+  const { data, mutate } = useClub()
+  const menu = useMemo(() => (data?.menuItems ?? []).filter((item) => item.active), [data])
+  const [quantities, setQuantities] = useState<Record<string, number>>(() =>
+    Object.fromEntries((session.items ?? []).map((item) => [item.itemId, item.qty])),
+  )
+  const [busy, setBusy] = useState(false)
+  const currentQty = (item: MenuItem) => session.items.find((line) => line.itemId === item.id)?.qty ?? 0
+
+  const save = async () => {
+    setBusy(true)
+    const result = await mutate(`sessions/${session.id}/items`, {
+      method: 'PUT',
+      body: { items: menu.map((item) => ({ menuItemId: item.id, qty: quantities[item.id] ?? 0 })) },
+      toast: 'Table items updated',
+    })
+    setBusy(false)
+    if (result) onClose()
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Table items · ${session.tableName ?? 'Session'}`}
+      width={500}
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn variant="green" loading={busy} onClick={() => void save()}>Save items</Btn>
+        </>
+      }
+    >
+      <p className="muted small">Set each quantity. Set it to 0 to remove; stock and final bill update when saved.</p>
+      <div className="session-item-editor">
+        {menu.map((item) => {
+          const qty = quantities[item.id] ?? 0
+          const maxQty = item.stockQty + currentQty(item)
+          return (
+            <div className="session-item-edit-row" key={item.id}>
+              <span className="session-item-edit-name">
+                <b className="session-item-edit-title">
+                  <CategoryIcon icon={item.categoryIcon ?? defaultCategoryIcon(item.category ?? 'Cafe')} size={14} />
+                  <span>{item.name}</span>
+                </b>
+                <span className="muted small">{formatCurrency(item.price)} · {maxQty} available</span>
+              </span>
+              <span className="qty-ctl">
+                <button type="button" aria-label={`Remove one ${item.name}`} disabled={busy || qty <= 0} onClick={() => setQuantities((current) => ({ ...current, [item.id]: qty - 1 }))}>−</button>
+                <b>{qty}</b>
+                <button type="button" aria-label={`Add one ${item.name}`} disabled={busy || qty >= maxQty} onClick={() => setQuantities((current) => ({ ...current, [item.id]: qty + 1 }))}>+</button>
+              </span>
+            </div>
+          )
+        })}
+        {menu.length === 0 && <EmptyState title="No active cafe items" hint="Add cafe items in Items to bill them to this table." />}
+      </div>
+    </Modal>
+  )
+}
+
 function AdvanceModal({ session, table, onClose }: { session: ActiveSession; table: ClubTable; onClose: () => void }) {
   const { mutate } = useClub()
   const toast = useToast()
   const [amount, setAmount] = useState('')
-  const [mode, setMode] = useState<'cash' | 'upi' | 'card'>('cash')
+  const [mode, setMode] = useState<'cash' | 'upi'>('cash')
   const [busy, setBusy] = useState(false)
 
   const save = async () => {
@@ -280,18 +401,17 @@ function AdvanceModal({ session, table, onClose }: { session: ActiveSession; tab
         Already received <b className="money-green">{formatCurrency(session.advancePaid ?? 0)}</b> advance.
         A new advance joins today’s collection (day-close) instantly and adjusts on the final bill.
       </p>
-      <div className="form-grid" style={{ marginTop: 8 }}>
+      <div className="form-grid two advance-fields" style={{ marginTop: 8 }}>
         <Field label="Amount">
           <TextInput inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="100" autoFocus onKeyDown={(e) => e.key === 'Enter' && save()} />
         </Field>
         <Field label="Mode">
           <Seg
             value={mode}
-            onChange={(v) => setMode(v as 'cash' | 'upi' | 'card')}
+            onChange={(v) => setMode(v as 'cash' | 'upi')}
             options={[
               { value: 'cash', label: 'Cash' },
               { value: 'upi', label: 'UPI' },
-              { value: 'card', label: 'Card' },
             ]}
           />
         </Field>
@@ -395,20 +515,20 @@ function MoveModal({ session, table, onClose }: { session: ActiveSession; table:
 
 function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSession }) {
   const { data, mutate } = useClub()
+  const toast = useToast()
   const menu = useMemo(() => (data?.menuItems ?? []).filter((m) => m.active), [data])
   const [now, setNow] = useState(() => Date.now())
   const [busy, setBusy] = useState(false)
   const [itemBusy, setItemBusy] = useState<string | null>(null)
+  const [itemsOpen, setItemsOpen] = useState(false)
   const [qaModal, setQaModal] = useState<'advance' | 'note' | 'move' | null>(null)
   const [playerModal, setPlayerModal] = useState(false)
-  const [playerQuery, setPlayerQuery] = useState('')
   const [playerMemberId, setPlayerMemberId] = useState('')
   const [guestName, setGuestName] = useState('')
   const [playerTeam, setPlayerTeam] = useState<Team>('A')
   const [playerSaving, setPlayerSaving] = useState(false)
   const members = useMemo(() => (data?.members ?? []).filter((m) => m.active), [data])
   const availableMembers = members.filter((m) => !session.players.some((p) => p.memberId === m.id))
-  const filteredMembers = availableMembers.filter((m) => m.name.toLowerCase().includes(playerQuery.toLowerCase()))
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000)
@@ -435,8 +555,30 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
   }
 
   const addPlayer = async () => {
-    const selected = members.find((m) => m.id === playerMemberId)
-    const label = selected?.name || guestName.trim()
+    const guest = guestName.trim()
+    let selected = members.find((m) => m.id === playerMemberId)
+    if (!selected && guest) {
+      const existing = members.find((m) => m.name.trim().toLowerCase() === guest.toLowerCase())
+      if (existing && session.players.some((player) => player.memberId === existing.id)) {
+        toast.error('This player is already in the session')
+        return
+      }
+      selected = existing
+      if (!selected) {
+        setPlayerSaving(true)
+        selected = await mutate<Member>('members', {
+          body: { name: guest },
+          toast: `Guest added to Players · ${guest}`,
+        }) ?? undefined
+        if (!selected) {
+          setPlayerSaving(false)
+          return
+        }
+        setPlayerMemberId(selected.id)
+        setGuestName('')
+      }
+    }
+    const label = selected?.name || guest
     if (!label) return
     setPlayerSaving(true)
     const result = await mutate(`sessions/${session.id}/players`, {
@@ -451,7 +593,6 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
     setPlayerSaving(false)
     if (result) {
       setPlayerModal(false)
-      setPlayerQuery('')
       setPlayerMemberId('')
       setGuestName('')
     }
@@ -501,20 +642,24 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
               title={m.stockQty <= 0 ? 'Out of stock' : `${m.stockQty} in stock · add 1 to this session`}
               onClick={() => void addItem(m.id)}
             >
-              <Plus size={9} />
+              <CategoryIcon icon={m.categoryIcon ?? defaultCategoryIcon(m.category ?? 'Cafe')} size={12} />
               <span className="item-chip-name">{m.name}</span>
               <span className="money-gold">{formatCurrency(m.price)}</span>
             </button>
           ))}
+          {menu.length > 10 && (
+            <Btn size="sm" variant="ghost" onClick={() => setItemsOpen(true)}>All items · {menu.length}</Btn>
+          )}
         </div>
       )}
       {attached.length > 0 && (
         <div className="session-items">
-          <div className="chip-row">
-            {attached.map((l) => (
-              <span key={l.itemId} className="chip sm-chip">
-                {l.name} ×{l.qty} · <b className="money-gold">{formatCurrency(l.amount)}</b>
-              </span>
+          <div className="session-item-list">
+            {attached.map((item) => (
+              <div key={item.itemId} className="session-item-line">
+                <span>{item.name} ×{item.qty}</span>
+                <b className="money-gold">{formatCurrency(item.amount)}</b>
+              </div>
             ))}
           </div>
           <p className="muted small">Items on this table · {formatCurrency(attachedTotal)} — added on the final bill automatically.</p>
@@ -522,6 +667,9 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
       )}
 
       <div className="qa-row">
+        <Btn size="sm" variant="ghost" onClick={() => setItemsOpen(true)} title="Add or edit cafe items for this table">
+          <Plus size={12} /> Cafe Items
+        </Btn>
         <Btn size="sm" variant="ghost" onClick={() => setPlayerModal(true)} title="Add player">
           <UserPlus size={12} /> Player
         </Btn>
@@ -531,23 +679,26 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
         <Btn size="sm" variant="ghost" onClick={() => setQaModal('note')} title="Session note">
           <StickyNote size={12} /> Note
         </Btn>
-        <Btn size="sm" variant="ghost" onClick={() => setQaModal('move')} title="Move to another table">
-          <ArrowRightLeft size={12} /> Move
-        </Btn>
       </div>
 
-      <Btn variant="red" className="btn-block" loading={busy} onClick={stop}>
-        <Square size={12} /> Stop &amp; Final Bill
-      </Btn>
+      <div className="session-action-row">
+        <Btn size="sm" variant="ghost" style={{height:"32px"}} onClick={() => setQaModal('move')} title="Move to another table">
+          <ArrowRightLeft size={12} /> Move
+        </Btn>
+        <Btn variant="red" size="sm" style={{height:"32px"}} className="btn-block" loading={busy} onClick={stop}>
+          <Square size={12} /> Stop &amp; Final Bill
+        </Btn>
+      </div>
 
       {qaModal === 'advance' && <AdvanceModal session={session} table={table} onClose={() => setQaModal(null)} />}
       {qaModal === 'note' && <NoteModal session={session} table={table} onClose={() => setQaModal(null)} />}
       {qaModal === 'move' && <MoveModal session={session} table={table} onClose={() => setQaModal(null)} />}
+      {itemsOpen && <SessionItemsModal session={session} onClose={() => setItemsOpen(false)} />}
       <Modal
         open={playerModal}
         onClose={() => setPlayerModal(false)}
         title={`Add player · ${table.name}`}
-        width={420}
+        width={440}
         footer={
           <>
             <Btn variant="ghost" onClick={() => setPlayerModal(false)}>Cancel</Btn>
@@ -557,20 +708,40 @@ function OccupiedCard({ table, session }: { table: ClubTable; session: ActiveSes
           </>
         }
       >
-        <div className="search-box">
-          <Search size={13} />
-          <input value={playerQuery} onChange={(e) => setPlayerQuery(e.target.value)} placeholder="Search member" aria-label="Search member" />
+        <div className="add-player-form">
+          <Field label="Select a member">
+            <Select
+              value={playerMemberId}
+              onChange={(e) => {
+                setPlayerMemberId(e.target.value)
+                if (e.target.value) setGuestName('')
+              }}
+              autoFocus
+            >
+              <option value="">Choose a member…</option>
+              {availableMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}{m.dueAmount > 0 ? ` · due ${formatCurrency(m.dueAmount)}` : ''}
+                </option>
+              ))}
+            </Select>
+            {availableMembers.length === 0 && <span className="muted small">All active members are already in this session.</span>}
+          </Field>
+          <div className="add-player-divider"><span>OR</span></div>
+          <Field label="Guest name">
+            <TextInput
+              value={guestName}
+              onChange={(e) => {
+                setGuestName(e.target.value)
+                if (e.target.value) setPlayerMemberId('')
+              }}
+              placeholder="Enter guest name"
+              aria-label="Guest name"
+              maxLength={80}
+            />
+            <span className="field-hint">New names are saved to Players for next time.</span>
+          </Field>
         </div>
-        <div className="stack-sm" style={{ maxHeight: 260, overflowY: 'auto', marginTop: 8 }}>
-          <button type="button" className={`chip${playerMemberId === '' ? ' active' : ''}`} onClick={() => setPlayerMemberId('')}>Guest / walk-in</button>
-          {filteredMembers.map((m) => (
-            <button key={m.id} type="button" className={`chip${playerMemberId === m.id ? ' active' : ''}`} onClick={() => { setPlayerMemberId(m.id); setGuestName('') }}>
-              {m.name}{m.dueAmount > 0 ? ` · due ${formatCurrency(m.dueAmount)}` : ''}
-            </button>
-          ))}
-          {filteredMembers.length === 0 && <span className="muted small">No members found</span>}
-        </div>
-        {!playerMemberId && <TextInput value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Or enter guest name" aria-label="Guest name" />}
         {session.matchMode === '2v2' && <Seg ariaLabel="Team" value={playerTeam} onChange={(v) => setPlayerTeam(v as Team)} options={[{ value: 'A', label: 'Team A' }, { value: 'B', label: 'Team B' }]} />}
       </Modal>
     </Card>
@@ -640,7 +811,9 @@ interface Estimate {
   membershipName: string | null
   passCredit: number
   passName: string | null
+  passMemberIds: string[]
   passFramesLeft: number | null
+  passMessage: string | null
   frameAmount: number
   oldDue: number
   total: number
@@ -658,6 +831,7 @@ function estimateBill(
   menu: MenuItem[],
   discountIn: number,
   settings: { winnerBonus: number; monthlyTableDiscount: number },
+  usePass: boolean,
 ): Estimate {
   const { amount: tableAmount, minutes } = calcTableAmount(
     session.startedAt,
@@ -668,7 +842,11 @@ function estimateBill(
   const items = menu.filter((m) => (qty[m.id] ?? 0) > 0)
   const attachedItems = session.items ?? []
   const attachedTotal = attachedItems.reduce((s, l) => s + (l.amount ?? 0), 0)
-  const itemsTotal = attachedTotal + items.reduce((s, m) => s + (qty[m.id] ?? 0) * m.price, 0)
+  const attachedQty = new Map(attachedItems.map((item) => [item.itemId, item.qty]))
+  const itemsTotal = attachedTotal + items.reduce(
+    (s, m) => s + Math.max(0, (qty[m.id] ?? 0) - (attachedQty.get(m.id) ?? 0)) * m.price,
+    0,
+  )
   const bonus = settings.winnerBonus || 0
   const losingMembers = losers
     .map((p) => (p.memberId ? memberById.get(p.memberId) : undefined))
@@ -676,43 +854,76 @@ function estimateBill(
 
   const { pct, name } = maxPayingDiscount(losingMembers, settings.monthlyTableDiscount || 0)
   const membershipDiscount = Math.round(((tableAmount * pct) / 100) * 100) / 100
-
-  let passCredit = 0
-  let passName: string | null = null
-  let passFramesLeft: number | null = null
-  for (const m of losingMembers) {
-    if ((m.passFramesLeft ?? 0) < 1 || !planValid(m.planExpiresAt) || m.dueAmount > 0) continue
-    const credit = Math.min(session.hourlyRate, tableAmount - membershipDiscount)
-    if (credit > 0) {
-      passCredit = Math.round(credit * 100) / 100
-      passName = m.name
-      passFramesLeft = m.passFramesLeft ?? 0
-      break
-    }
-  }
-
   const manualDiscount = Math.min(discountIn, tableAmount + itemsTotal + bonus)
   // Unreturned gloves join the frame money AFTER all discounts (backend rules).
   const glovesOut = (session.gloves ?? []).filter((g) => !g.returned)
   const gloveCharges = Math.round(glovesOut.reduce((s, g) => s + (g.price || 0), 0) * 100) / 100
+  const passCandidates = losers.map((player) => {
+    if (player.memberId) return memberById.get(player.memberId)
+    const playerName = player.label.trim().toLocaleLowerCase()
+    const matches = [...memberById.values()].filter(
+      (member) => member.name.trim().toLocaleLowerCase() === playerName,
+    )
+    return matches.length === 1 ? matches[0] : undefined
+  }).filter((member): member is Member => Boolean(member))
+  const passMembers = passCandidates.filter(
+    (m, index, all) =>
+      (m.passFramesLeft ?? 0) > 0 &&
+      planValid(m.planExpiresAt) &&
+      m.dueAmount <= 0 &&
+      all.findIndex((candidate) => candidate.id === m.id) === index,
+  )
+  const passMemberIds = passMembers.map((m) => m.id)
+  const passName = passMembers.length ? passMembers.map((m) => m.name).join(', ') : null
+  const passFramesLeft = passMembers[0]?.passFramesLeft ?? null
+  const exhaustedPassMembers = passCandidates.filter((m, index, all) =>
+    m.planType === 'pass' && (m.passFramesLeft ?? 0) < 1 &&
+    all.findIndex((candidate) => candidate.id === m.id) === index,
+  )
+  const passMessage = (() => {
+    if (exhaustedPassMembers.length) {
+      const action = passMembers.length ? 'unka bill doosre mode se pay hoga.' : 'doosra payment mode choose karein.'
+      return `${exhaustedPassMembers.map((m) => m.name).join(', ')} ke frame pass khatam ho gaye; ${action}`
+    }
+    if (passMembers.length) return null
+    const blockedByDue = passCandidates.filter((m) => (m.passFramesLeft ?? 0) > 0 && m.dueAmount > 0)
+    if (blockedByDue.length) {
+      return `${blockedByDue.map((m) => m.name).join(', ')} par pending due hai; pass use karne se pehle due clear karein.`
+    }
+    return 'Kisi payer ke paas active frame pass nahi hai. Doosra payment mode choose karein.'
+  })()
+  const passEligibleShare = losers.length
+    ? Math.max(0, (tableAmount + itemsTotal + bonus - manualDiscount - membershipDiscount + gloveCharges) / losers.length)
+    : 0
+  const passCredit = usePass
+    ? Math.round(passMembers.reduce((sum) => sum + Math.min(session.hourlyRate, passEligibleShare), 0) * 100) / 100
+    : 0
   const frameAmount =
     Math.max(
       0,
-      Math.round((tableAmount + itemsTotal + bonus - manualDiscount - membershipDiscount - passCredit) * 100) / 100,
+      Math.round((tableAmount + itemsTotal + bonus - manualDiscount - membershipDiscount) * 100) / 100,
     ) + gloveCharges
   const oldDue = losingMembers.reduce((s, m) => s + (m.dueAmount || 0), 0)
   const total = frameAmount + oldDue
   const share = losers.length ? frameAmount / losers.length : 0
   const walletBy = losingMembers
-    .map((m) => ({ name: m.name, amount: Math.min(m.walletBalance || 0, share) }))
+    .map((m) => ({
+      name: m.name,
+      amount: Math.min(
+        m.walletBalance || 0,
+        Math.max(0, share - (passMembers.some((passMember) => passMember.id === m.id)
+          ? Math.min(session.hourlyRate, passEligibleShare)
+          : 0)),
+      ),
+    }))
     .filter((w) => w.amount > 0)
   const walletCover = walletBy.reduce((s, w) => s + w.amount, 0)
-  const itemLines = attachedItems.length + items.length
+  const itemLines = new Set([...attachedItems.map((item) => item.itemId), ...items.map((item) => item.id)]).size
 
   return {
     tableAmount, minutes, itemsTotal, itemLines, gloveCharges, gloveMissing: glovesOut.length, bonus, manualDiscount,
     membershipDiscount, membershipPct: pct, membershipName: name,
-    passCredit, passName, passFramesLeft, frameAmount, oldDue, total,
+    passCredit, passName, passMemberIds, passFramesLeft, passMessage, frameAmount, oldDue, total,
     walletCover, walletBy, losers, losingMembers,
   }
 }
@@ -725,20 +936,27 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
   const settings = data?.club.settings
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
 
-  const [winners, setWinners] = useState<string[]>([])
+  const [split, setSplit] = useState(false)
+  const [payers, setPayers] = useState<string[]>([])
   const [teamPick, setTeamPick] = useState<Team | null>(null)
-  const [qty, setQty] = useState<Record<string, number>>({})
+  const [qty, setQty] = useState<Record<string, number>>(() =>
+    Object.fromEntries((session.items ?? []).map((item) => [item.itemId, item.qty])),
+  )
   const [discount, setDiscount] = useState('0')
-  const [mode, setMode] = useState<PaymentMode | null>(null)
+  const [mode, setMode] = useState<PaymentMode | 'pass' | null>(null)
   const [paid, setPaid] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [editingGuest, setEditingGuest] = useState<SessionPlayer | null>(null)
+  const [guestName, setGuestName] = useState('')
+  const [guestSaving, setGuestSaving] = useState(false)
 
   const is2v2 = session.matchMode === '2v2'
   const losers = useMemo(() => {
+    if (split) return session.players
     if (is2v2) return teamPick ? session.players.filter((p) => p.team !== teamPick) : []
-    return session.players.filter((p) => !winners.includes(p.id))
-  }, [is2v2, teamPick, winners, session.players])
-  const validSides = is2v2 ? teamPick !== null : winners.length >= 1 && losers.length >= 1
+    return session.players.filter((p) => payers.includes(p.id))
+  }, [split, is2v2, teamPick, payers, session.players])
+  const validSides = split || (is2v2 ? teamPick !== null : payers.length > 0)
 
   const est = useMemo(
     () =>
@@ -750,20 +968,25 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
         menu,
         parseNum(discount),
         { winnerBonus: settings?.winnerBonus ?? 0, monthlyTableDiscount: settings?.monthlyTableDiscount ?? 0 },
+        mode === 'pass' || mode === null,
       ),
-    [session, losers, validSides, memberById, qty, menu, discount, settings],
+    [session, losers, validSides, memberById, qty, menu, discount, settings, mode],
   )
 
-  // Auto-select Wallet when a losing member has wallet (spec) — until user touches mode.
-  const autoMode: PaymentMode =
-    mode ?? (est.losingMembers.some((m) => (m.walletBalance ?? 0) > 0) ? 'wallet' : 'cash')
+  // Prefer a frame pass for an eligible payer, then wallet, until the cashier chooses a mode.
+  const fallbackMode: PaymentMode | 'pass' = est.passMemberIds.length
+    ? 'pass'
+    : est.losingMembers.some((m) => (m.walletBalance ?? 0) > 0) ? 'wallet' : 'cash'
+  const autoMode: PaymentMode | 'pass' = mode ?? fallbackMode
   const isDue = autoMode === 'due'
+  const isPass = autoMode === 'pass'
   const advance = session.advancePaid ?? 0 // already collected mid-session; offsets the bill
-  const defaultPaid = isDue || autoMode === 'wallet' ? 0 : Math.max(0, Math.round((est.total - est.walletCover - advance) * 100) / 100)
-  const paidNum = isDue ? 0 : paid === null ? defaultPaid : Math.max(0, parseNum(paid))
+  const defaultPaid = isDue || autoMode === 'wallet' || isPass ? 0 : Math.max(0, Math.round((est.total - est.walletCover - advance) * 100) / 100)
+  const paidNum = isDue || isPass ? 0 : paid === null ? defaultPaid : Math.max(0, parseNum(paid))
 
   const walletUsed = isDue ? 0 : est.walletCover
-  const estDueLeft = Math.max(0, Math.round((est.total - walletUsed - advance - paidNum) * 100) / 100)
+  const passPaid = isPass ? est.passCredit : 0
+  const estDueLeft = Math.max(0, Math.round((est.total - walletUsed - passPaid - advance - paidNum) * 100) / 100)
   const overLimit =
     estDueLeft > 0 &&
     (stats?.dueLimit ?? 0) > 0 &&
@@ -772,12 +995,77 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
   const pickTeam = (t: Team) => {
     setTeamPick((cur) => (cur === t ? null : t))
   }
-  const toggleWinner = (id: string) => {
-    setWinners((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]))
+  const togglePayer = (id: string) => {
+    if (split) {
+      setSplit(false)
+      setPayers([id])
+      return
+    }
+    setPayers((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]))
+  }
+  const toggleSplit = () => {
+    setSplit((current) => !current)
+    setPayers([])
+    setTeamPick(null)
+  }
+  const editGuest = (player: SessionPlayer) => {
+    setEditingGuest(player)
+    setGuestName(player.label)
+  }
+  const saveGuest = async () => {
+    const name = guestName.trim()
+    if (!editingGuest || !name) {
+      toast.error('Enter a guest name')
+      return
+    }
+    setGuestSaving(true)
+    let member = members.find((candidate) => candidate.name.trim().toLowerCase() === name.toLowerCase())
+    if (member && session.players.some((player) => player.id !== editingGuest.id && player.memberId === member?.id)) {
+      toast.error('This player is already in the session')
+      setGuestSaving(false)
+      return
+    }
+    if (member?.active === false) {
+      member = await mutate<Member>(`members/${member.id}`, {
+        method: 'PATCH',
+        body: { name, active: true },
+        toast: `Player activated · ${name}`,
+      }) ?? undefined
+      if (!member) {
+        setGuestSaving(false)
+        return
+      }
+    }
+    if (!member) {
+      member = await mutate<Member>('members', {
+        body: { name },
+        toast: `Guest added to Players · ${name}`,
+      }) ?? undefined
+      if (!member) {
+        setGuestSaving(false)
+        return
+      }
+    }
+    const result = await mutate(`sessions/${session.id}`, {
+      method: 'PATCH',
+      body: {
+        players: [{
+          pid: editingGuest.pid ?? editingGuest.id,
+          label: name,
+          type: 'member',
+          memberId: member.id,
+        }],
+      },
+      toast: `Guest saved to Players · ${name}`,
+    })
+    setGuestSaving(false)
+    if (result) setEditingGuest(null)
   }
   const bumpQty = (itemId: string, delta: number) => {
     setQty((q) => {
-      const next = Math.max(0, (q[itemId] ?? 0) + delta)
+      const attachedQty = (session.items ?? []).find((item) => item.itemId === itemId)?.qty ?? 0
+      const maxQty = (menu.find((item) => item.id === itemId)?.stockQty ?? 0) + attachedQty
+      const next = Math.min(maxQty, Math.max(attachedQty, (q[itemId] ?? attachedQty) + delta))
       return { ...q, [itemId]: next }
     })
   }
@@ -790,14 +1078,23 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
     setBusy(true)
     const body: Record<string, unknown> = {
       items: Object.entries(qty)
-        .filter(([, q]) => q > 0)
-        .map(([itemId, q]) => ({ itemId, qty: q })),
+        .map(([itemId, q]) => {
+          const attachedQty = (session.items ?? []).find((item) => item.itemId === itemId)?.qty ?? 0
+          return { itemId, qty: Math.max(0, q - attachedQty) }
+        })
+        .filter((item) => item.qty > 0),
       discount: parseNum(discount),
       paymentMode: autoMode,
       paidAmount: paidNum,
+      split,
+      usePass: autoMode === 'pass' ? est.passMemberIds : [],
     }
-    if (is2v2) body.winningTeam = teamPick
-    else body.winnerPlayerIds = winners
+    if (is2v2 && !split) body.winningTeam = teamPick
+    else if (!is2v2) {
+      body.winnerPlayerIds = split
+        ? []
+        : session.players.filter((player) => !payers.includes(player.id)).map((player) => player.id)
+    }
     const r = await mutate(`sessions/${session.id}/confirm`, {
       body,
       toast: `Frame bill confirmed · ${table.name}`,
@@ -812,7 +1109,15 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
   }
 
   const teamOf = (t: Team) => session.players.filter((p) => p.team === t)
+  const attachedQty = (itemId: string) => (session.items ?? []).find((item) => item.itemId === itemId)?.qty ?? 0
   const selectedItems = menu.filter((m) => (qty[m.id] ?? 0) > 0)
+  const splitShare = (index: number) => {
+    const count = session.players.length
+    if (!count) return 0
+    const totalCents = Math.round(est.total * 100)
+    const baseCents = Math.floor(totalCents / count)
+    return (baseCents + (index < totalCents % count ? 1 : 0)) / 100
+  }
 
   return (
     <Card className="table-card final">
@@ -825,15 +1130,40 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
           </div>
         </div>
         <div className="row" style={{ gap: 6 }}>
-          <Badge kind="blue">Final Bill</Badge>
-          <Btn size="sm" variant="ghost" onClick={resume} title="Resume session">
-            <RotateCcw size={11} /> Resume
-          </Btn>
+          <Badge kind="gold">Final Bill</Badge>
         </div>
       </div>
-
+      <div className="split-mode-row">
+        <span className={split ? 'money-green' : 'muted'}>
+          {split
+            ? `Split equally · about ${formatCurrency(splitShare(0))} each`
+            : is2v2
+              ? teamPick ? `Team ${teamPick} wins · Team ${teamPick === 'A' ? 'B' : 'A'} pays` : 'Select the winning team'
+              : payers.length > 0
+                ? `Payers: ${session.players.filter((player) => payers.includes(player.id)).map((player) => player.label).join(', ')}`
+                : 'Choose who pays'}
+        </span>
+        <Btn
+          size="sm"
+          variant={split ? 'green' : 'ghost'}
+          aria-pressed={split}
+          onClick={toggleSplit}
+          style={{ height:24 }}
+        >
+          Split
+        </Btn>
+      </div>
       {/* winner / team selection */}
-      {is2v2 ? (
+      {split ? (
+        <div className="split-share-list" aria-label="Estimated amount per player">
+          {session.players.map((player, index) => (
+            <div className="split-share-chip" key={player.id}>
+              <span>{player.label}</span>
+              <b>{formatCurrency(splitShare(index))}</b>
+            </div>
+          ))}
+        </div>
+      ) : is2v2 ? (
         <div className="team-pick">
           {(['A', 'B'] as Team[]).map((t) => (
             <button
@@ -859,22 +1189,62 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
       ) : (
         <div className="winner-pick">
           {session.players.map((p) => {
-            const win = winners.includes(p.id)
+            const payer = payers.includes(p.id)
+            const guest = p.type !== 'member' && !p.memberId
             return (
-              <button
-                key={p.id}
-                type="button"
-                className={`win-chip${win ? ' win' : ''}`}
-                onClick={() => toggleWinner(p.id)}
-                title={win ? 'Winner' : 'Pays'}
-              >
-                <span className={p.memberId && (memberById.get(p.memberId)?.dueAmount ?? 0) > 0 ? 'money-red' : ''}>{p.label}</span>
-                <span className={win ? 'money-green' : 'money-red'}>{win ? 'Winner' : 'Pays'}</span>
-              </button>
+              <div className={`win-chip-wrap${guest ? ' has-guest-edit' : ''}`} key={p.id}>
+                <button
+                  type="button"
+                  className={`win-chip${!payer && payers.length > 0 ? ' win' : ''}`}
+                  onClick={() => togglePayer(p.id)}
+                  title={payer ? 'Payer' : 'Winner'}
+                >
+                  <span className={p.memberId && (memberById.get(p.memberId)?.dueAmount ?? 0) > 0 ? 'money-red' : ''}>{p.label}</span>
+                  <span className={!payer && payers.length > 0 ? 'money-green' : payer ? 'money-red' : 'muted'}>
+                    {payers.length === 0 ? 'Tap to set payer' : payer ? 'Pays' : 'Winner'}
+                  </span>
+                </button>
+                {guest && (
+                  <button
+                    type="button"
+                    className="btn-icon guest-edit-btn"
+                    title={`Save ${p.label} to Players`}
+                    aria-label={`Edit guest name ${p.label}`}
+                    onClick={() => editGuest(p)}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>
       )}
+      <Modal
+        open={editingGuest !== null}
+        onClose={() => { if (!guestSaving) setEditingGuest(null) }}
+        title="Add guest to Players"
+        width={360}
+        footer={
+          <>
+            <Btn variant="ghost" disabled={guestSaving} onClick={() => setEditingGuest(null)}>Cancel</Btn>
+            <Btn variant="green" loading={guestSaving} disabled={!guestName.trim()} onClick={() => void saveGuest()}>
+              Save name
+            </Btn>
+          </>
+        }
+      >
+        <Field label="Guest name" hint="This guest will be saved in Players and linked to this bill.">
+          <TextInput
+            value={guestName}
+            maxLength={80}
+            autoFocus
+            onChange={(event) => setGuestName(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter') void saveGuest() }}
+            placeholder="Enter player name"
+          />
+        </Field>
+      </Modal>
 
       {/* gloves — return them here before confirming to drop their charge */}
       <GloveChips session={session} />
@@ -887,9 +1257,16 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
       {/* items */}
       {menu.length > 0 && (
         <div className="chip-row item-chips">
-          {menu.slice(0, 14).map((m) => (
-            <button key={m.id} type="button" className={`item-chip${(qty[m.id] ?? 0) > 0 ? ' has-qty' : ''}`} onClick={() => bumpQty(m.id, 1)}>
-              <Plus size={10} />
+          {menu.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className={`item-chip${(qty[m.id] ?? 0) > 0 ? ' has-qty' : ''}${(qty[m.id] ?? 0) >= m.stockQty + attachedQty(m.id) ? ' out-of-stock' : ''}`}
+              disabled={(qty[m.id] ?? 0) >= m.stockQty + attachedQty(m.id)}
+              title={(qty[m.id] ?? 0) >= m.stockQty + attachedQty(m.id) ? 'Out of stock' : `${m.stockQty} in stock`}
+              onClick={() => bumpQty(m.id, 1)}
+            >
+              <CategoryIcon icon={m.categoryIcon ?? defaultCategoryIcon(m.category ?? 'Cafe')} size={14} />
               <span className="item-chip-name">{m.name}</span>
               <span className="money-gold">{formatCurrency(m.price)}</span>
               {(qty[m.id] ?? 0) > 0 && <span className="qty-badge">{qty[m.id]}</span>}
@@ -901,11 +1278,14 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
         <div className="sel-items">
           {selectedItems.map((m) => (
             <div className="sel-item" key={m.id}>
-              <span className="sel-item-name">{m.name}</span>
+              <span className="sel-item-name">
+                <CategoryIcon icon={m.categoryIcon ?? defaultCategoryIcon(m.category ?? 'Cafe')} size={14} />
+                <span>{m.name}</span>
+              </span>
               <span className="qty-ctl">
-                <button aria-label="Decrease" onClick={() => bumpQty(m.id, -1)}>-</button>
+                <div aria-label="Decrease" style={{ display: 'flex', alignItems: 'center' }} onClick={() => bumpQty(m.id, -1)}><Minus size={14} color="var(--text)" /></div>
                 <b>{qty[m.id]}</b>
-                <button aria-label="Increase" onClick={() => bumpQty(m.id, 1)}>+</button>
+                <div aria-label="Increase" style={{ display: 'flex', alignItems: 'center' }} onClick={() => bumpQty(m.id, 1)}><Plus size={14} color="var(--text)" /></div>
               </span>
               <span className="money-gold small">{formatCurrency((qty[m.id] ?? 0) * m.price)}</span>
             </div>
@@ -917,26 +1297,31 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
       <div className="bill-controls">
         <label className="field">
           <span className="field-label">Discount</span>
-          <TextInput inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
+          <TextInput style={{height:"32px"}} inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
         </label>
         <label className="field">
-          <span className="field-label">Payment Mode</span>
-          <Select value={autoMode} onChange={(e) => { setMode(e.target.value as PaymentMode); setPaid(null) }}>
-            <option value="cash">Cash</option>
-            <option value="upi">UPI</option>
-            <option value="card">Card</option>
-            <option value="wallet">Wallet</option>
-            <option value="mixed">Mixed</option>
-            <option value="due">Add to Due</option>
-          </Select>
-        </label>
-        <label className="field">
-          <span className="field-label">{isDue ? 'Paid (locked)' : 'Paid'}</span>
+          <span className="field-label">{isPass ? 'Paid · Pass' : isDue ? 'Paid (locked)' : 'Paid'}</span>
           <TextInput
+          style={{height:"32px"}}
             inputMode="decimal"
-            value={isDue ? '0' : paid === null ? String(defaultPaid) : paid}
-            disabled={isDue}
+            value={isPass ? String(est.passCredit) : isDue ? '0' : paid === null ? String(defaultPaid) : paid}
+            disabled={isDue || isPass}
             onChange={(e) => setPaid(e.target.value)}
+          />
+        </label>
+        <label className="field bill-mode-field">
+          <span className="field-label">Payment Mode</span>
+          <Seg
+            ariaLabel="Payment mode"
+            value={autoMode}
+            onChange={(value) => { setMode(value); setPaid(null) }}
+            options={[
+              { value: 'cash' as PaymentMode, label: 'Cash' },
+              { value: 'upi' as PaymentMode, label: 'UPI' },
+              { value: 'wallet' as PaymentMode, label: 'Wallet' },
+              { value: 'pass' as const, label: 'Pass' },
+              { value: 'due' as PaymentMode, label: 'Due' },
+            ]}
           />
         </label>
       </div>
@@ -947,6 +1332,9 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
             <span className="muted"> ({est.walletBy.map((w) => `${w.name} -${formatCurrency(w.amount)}`).join(', ')})</span>
           )}
         </p>
+      )}
+      {est.passMessage && (isPass || est.passMessage.includes('frame pass khatam ho gaye')) && (
+        <p className="small warn-text" role="status">{est.passMessage}</p>
       )}
 
       {/* bill rows */}
@@ -977,10 +1365,14 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
         </p>
       )}
 
-      <Btn variant="green" className="btn-block" loading={busy} disabled={!validSides} onClick={confirm}>
-        Confirm Bill · {formatCurrency(validSides ? est.total : 0)}
-      </Btn>
-      <p className="muted small center">Final amounts are computed by the server.</p>
+      <div className="final-actions">
+        <Btn variant="ghost"  style={{ height: '32px' }} onClick={resume} title="Resume session">
+          <RotateCcw size={12} /> Resume
+        </Btn>
+        <Btn variant="green" style={{ height: '32px' , fontWeight: '600' }} className="btn-block" loading={busy} disabled={!validSides || (isPass && est.passMemberIds.length === 0)} onClick={confirm}>
+          Confirm Bill · {formatCurrency(validSides ? est.total : 0)}
+        </Btn>
+      </div>
     </Card>
   )
 }
@@ -996,13 +1388,23 @@ export default function TablesScreen() {
 
   return (
     <div className="stack">
-      <div className="grid-stats">
-        <StatCard label="Total Due" tone="red" value={formatCurrency(stats?.totalDue ?? 0)} sub={`${stats?.activeMembers ?? 0} active members`} />
-        <StatCard label="Daily Earnings" tone="green" value={formatCurrency(stats?.todayEarnings ?? 0)} sub="PAYMENT ledger · today" />
-        <StatCard label="Due Limit" tone="blue" value={formatCurrency(stats?.dueLimit ?? 0)} sub={(stats?.totalDue ?? 0) > (stats?.dueLimit ?? 0) ? 'Limit exceeded' : 'Club setting'} />
-      </div>
-
       <InsightsCard compact scopes={['live', 'members', 'stock', 'revenue']} max={4} title="Smart Insights · Today" />
+      <Card className="games-earnings-card pulse-card">
+        <div className="games-earnings-copy">
+          <div className="games-earnings-label">Today's Earnings</div>
+          <div className="games-earnings-total">{formatCurrency(stats?.todayEarnings ?? 0)}</div>
+          <div className="games-earnings-modes">
+            <span>Cash <b>{formatCurrency(stats?.todayCash ?? 0)}</b></span>
+            <span>UPI <b>{formatCurrency(stats?.todayUpi ?? 0)}</b></span>
+            <span>Wallet used <b>{formatCurrency(stats?.todayWallet ?? 0)}</b></span>
+          </div>
+          <div className="games-earnings-due">
+            Total Due: {formatCurrency(stats?.totalDue ?? 0)}
+            <span> · {stats?.activeMembers ?? 0} active members</span>
+          </div>
+        </div>
+        <IndianRupee className="games-earnings-icon" size={50} strokeWidth={1.8} aria-hidden />
+      </Card>
 
       {tables.length === 0 ? (
         <EmptyState title="No games yet" hint="Add games from Settings → Game Pricing." />

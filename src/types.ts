@@ -1,9 +1,9 @@
 // Rowdy's Den — shared TypeScript types (mirror of the backend API surface).
 
 export type Role = 'owner' | 'staff' | 'master'
-export type SubStatus = 'pending' | 'trial' | 'active' | 'past_due' | 'paused' | 'expired' | 'cancelled'
+export type SubStatus = 'pending' | 'trial' | 'active' | 'past_due' | 'paused' | 'keep_current' | 'current' | 'expired' | 'cancelled'
 export type BillingCycle = 'monthly' | 'yearly'
-export type PaymentMode = 'cash' | 'upi' | 'card' | 'wallet' | 'due' | 'mixed'
+export type PaymentMode = 'cash' | 'upi' | 'card' | 'wallet' | 'pass' | 'due' | 'mixed'
 export type PlanPaymentMode = 'cash' | 'upi' | 'card'
 export type PlanType = 'wallet' | 'pass' | 'monthly'
 export type MemberType = 'regular' | 'wallet' | 'pass' | 'due' | 'monthly'
@@ -159,6 +159,7 @@ export interface SessionPlayer {
   label: string
   type: 'guest' | 'member' | 'new_guest'
   memberId?: string | null
+  pid?: string | null
   isWinner?: boolean
   team?: Team | null
 }
@@ -268,9 +269,9 @@ export interface MenuItem {
   id: string
   clubId: string
   name: string
-  /** Product photo (data-URL/URL) — den_app items screen parity. */
-  image?: string | null
   category: string
+  categoryIcon?: 'cafe' | 'drinks' | 'snacks' | 'momo' | 'burger' | 'pizza' | 'cold_drinks' | 'patties'
+    | 'chalk' | 'gloves' | 'cue' | 'accessories' | 'other' | null
   price: number
   costPrice: number
   stockQty: number
@@ -349,6 +350,9 @@ export interface ClubStats {
   clubId: string
   totalDue: number
   todayEarnings: number
+  todayCash: number
+  todayUpi: number
+  todayWallet: number
   dueLimit: number
   activeMembers: number
   activeSessions: number

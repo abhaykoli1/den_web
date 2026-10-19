@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Headset, Send, Sparkles, X } from 'lucide-react'
+import { Headset, Send, X } from 'lucide-react'
 import { api } from '../lib/api'
 
 type Msg = { from: 'bot' | 'user'; text: string }
@@ -125,7 +125,6 @@ function botReply(qRaw: string, contact: SupportContact): string {
 /** Floating customer-care chat, available on every screen. */
 export default function SupportChat() {
   const [open, setOpen] = useState(false)
-  const [seen, setSeen] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([WELCOME])
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
@@ -137,7 +136,7 @@ export default function SupportChat() {
   // Human Support page (SupportScreen.tsx, v3.8).
   useEffect(() => {
     let alive = true
-    api('/platform/support')
+    api<SupportContact>('/platform/support')
       .then((c) => { if (alive && c) setContact({ email: c.email ?? '', phone: c.phone ?? '' }) })
       .catch(() => { /* silent: chat still works without it */ })
     return () => { alive = false }
@@ -151,7 +150,6 @@ export default function SupportChat() {
   useEffect(() => {
     const openCare = () => {
       setOpen(true)
-      setSeen(true)
     }
     window.addEventListener('rd:care-open', openCare)
     return () => window.removeEventListener('rd:care-open', openCare)
@@ -226,21 +224,6 @@ export default function SupportChat() {
         </div>
       )}
 
-      <button
-        className="support-fab"
-        aria-label={open ? 'Close customer care' : 'Open customer care chat'}
-        onClick={() => {
-          setOpen(!open)
-          setSeen(true)
-        }}
-      >
-        {open ? <X size={17} /> : <Headset size={17} />}
-        {!open && !seen && (
-          <span className="support-hello">
-            <Sparkles size={9} /> Help?
-          </span>
-        )}
-      </button>
     </>
   )
 }

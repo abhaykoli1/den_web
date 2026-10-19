@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Boxes,
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   Crown,
   PackageX,
   PartyPopper,
@@ -84,6 +86,7 @@ export default function InsightsCard({
   title = 'Smart Insights',
 }: Props) {
   const { club, data } = useClub()
+  const [expanded, setExpanded] = useState(false)
   const monthKey_ = month ?? monthKey()
   const wanted = useMemo(() => new Set<InsightScope>(scopes ?? ALL_SCOPES), [scopes])
 
@@ -467,7 +470,6 @@ export default function InsightsCard({
     // Critical first — compact strips show red/gold alerts before good news.
     const rank = { red: 0, gold: 1, blue: 2, green: 3 } as const
     return [...out].sort((a, b) => rank[a.tone] - rank[b.tone])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted, rep, fin, tours, data, monthKey_])
 
   const limit = max ?? (compact ? 3 : 8)
@@ -476,23 +478,31 @@ export default function InsightsCard({
 
   return (
     <Card className={`insights${compact ? ' compact' : ''}`}>
-      <div className="row spread">
-        <div className="section-title" style={{ margin: 0 }}>
-          <Sparkles size={13} className="money-gold" style={{ verticalAlign: -2 }} /> {title}
-        </div>
-        <span className="live-badge">
-          <span className="live-dot" /> LIVE
+      <button
+        type="button"
+        className="insights-toggle"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${title}`}
+      >
+        <span className="insights-label">
+          <Sparkles size={12} /> AI Insight <span className="insights-count">{visible.length}</span>
         </span>
-      </div>
-      <div className="stack-xs" style={{ marginTop: 6 }}>
-        {visible.map((ins, i) => (
-          <div key={i} className={`insight-row insight-${ins.tone}`}>
-            <span className="ic">{ins.icon}</span>
-            <span>{ins.text}</span>
-          </div>
-        ))}
-      </div>
-      {insights.length > visible.length && (
+        {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+      </button>
+      {expanded ? (
+        <div className="stack-xs insights-list">
+          {visible.map((ins, i) => (
+            <div key={i} className={`insight-row insight-${ins.tone}`}>
+              <span className="ic">{ins.icon}</span>
+              <span>{ins.text}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="insights-summary">{visible[0].text}</div>
+      )}
+      {expanded && insights.length > visible.length && (
         <p className="muted small" style={{ marginTop: 4 }}>+{insights.length - visible.length} aur insights — Reports / Finance pe pura breakdown.</p>
       )}
     </Card>

@@ -1,5 +1,25 @@
 // Central REST client: base URL, bearer token, typed errors, 401 handling.
 import { clearToken, getToken } from './storage'
+import { isRecord, readRecords, readStrings, validateClubDataRoot } from './clubDataSchema'
+import type {
+  ActiveSession,
+  ActivityLog,
+  Club,
+  ClubData,
+  ClubTable,
+  Expense,
+  FrameRecord,
+  ItemBill,
+  Member,
+  MembershipPlan,
+  MembershipSale,
+  MenuItem,
+  MatchMode,
+  SessionPlayer,
+  BillLineItem,
+  Settlement,
+  ClubStats,
+} from '../types'
 
 export class ApiError extends Error {
   status: number
@@ -10,17 +30,19 @@ export class ApiError extends Error {
   }
 }
 
+export { isRecord }
+
 export const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
 
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 export const DEV_MODE = String(import.meta.env.VITE_AUTH_DEV_MODE).toLowerCase() === 'true'
 
 interface ApiOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
 }
 
-export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise<T> {
+export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
   const { method = 'GET', body } = opts
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
@@ -38,23 +60,29 @@ export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise
     throw new ApiError(0, 'Network error — is the backend running?')
   }
 
-  let data: any = null
+  let data: unknown = null
   const text = await res.text()
+  let invalidJson = false
   if (text) {
     try {
       data = JSON.parse(text)
     } catch {
-      data = null
+      invalidJson = true
     }
   }
 
+  if (res.ok && invalidJson) throw new ApiError(502, 'Server returned an invalid response')
+
   if (!res.ok) {
-    const detail = data?.detail
+    const detail = isRecord(data) ? data.detail : undefined
     let message =
       typeof detail === 'string'
         ? detail
         : Array.isArray(detail)
-          ? detail.map((d: any) => d?.msg || String(d)).join('; ')
+          ? detail.map((entry: unknown) => {
+              const message = isRecord(entry) ? entry.msg : undefined
+              return typeof message === 'string' ? message : String(entry)
+            }).join('; ')
           : res.status === 401
             ? 'Your session expired — please sign in again'
             : `Request failed (${res.status})`
@@ -80,7 +108,7 @@ export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise
 
 // ---- normalization helpers (defensive defaults around raw API JSON) ----
 
-export function asArray<T = any>(v: unknown): T[] {
+export function asArray<T = unknown>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : []
 }
 
@@ -89,39 +117,40 @@ export function asNum(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
-export function normClubData(raw: any): import('../types').ClubData {
-  const sessions = asArray<any>(raw?.sessions).map((s) => ({
+export function normClubData(value: unknown): ClubData {
+  const raw = validateClubDataRoot(value)
+  const sessions = readRecords<ActiveSession>(raw.sessions, 'sessions', ['id', 'startedAt']).map((s, index) => ({
     ...s,
-    matchMode: s?.matchMode === '2v2' ? '2v2' : 'solo',
-    players: asArray(s?.players),
-    items: asArray(s?.items),
+    matchMode: (s?.matchMode === '2v2' ? '2v2' : 'solo') as MatchMode,
+    players: readRecords<SessionPlayer>(s?.players, `sessions[${index}].players`, ['label']),
+    items: readRecords<BillLineItem>(s?.items, `sessions[${index}].items`),
   }))
-  const frames = asArray<any>(raw?.frames).map((f) => ({
+  const frames = readRecords<FrameRecord>(raw.frames, 'frames', ['id']).map((f, index) => ({
     ...f,
-    matchMode: f?.matchMode === '2v2' ? '2v2' : 'solo',
-    players: asArray(f?.players),
-    items: asArray(f?.items),
-    winners: asArray(f?.winners),
-    losers: asArray(f?.losers),
-    settlements: asArray(f?.settlements),
+    matchMode: (f?.matchMode === '2v2' ? '2v2' : 'solo') as MatchMode,
+    players: readRecords<SessionPlayer>(f?.players, `frames[${index}].players`, ['label']),
+    items: readRecords<BillLineItem>(f?.items, `frames[${index}].items`),
+    winners: readStrings(f?.winners, `frames[${index}].winners`),
+    losers: readStrings(f?.losers, `frames[${index}].losers`),
+    settlements: readRecords<Settlement>(f?.settlements, `frames[${index}].settlements`),
   }))
   return {
-    club: raw?.club ?? null,
-    tables: asArray(raw?.tables).map((t: any) => ({ ...t, active: t?.active !== false })),
-    members: asArray(raw?.members).map((m: any) => ({ ...m, active: m?.active !== false })),
-    plans: asArray(raw?.plans).map((p: any) => ({ ...p, active: p?.active !== false })),
+    club: raw.club as unknown as Club,
+    tables: readRecords<ClubTable>(raw.tables, 'tables', ['id', 'name']).map((t) => ({ ...t, active: t?.active !== false })),
+    members: readRecords<Member>(raw.members, 'members', ['id', 'name']).map((m) => ({ ...m, active: m?.active !== false })),
+    plans: readRecords<MembershipPlan>(raw.plans, 'plans', ['id', 'name', 'type']).map((p) => ({ ...p, active: p?.active !== false })),
     sessions,
     frames,
-    menuItems: asArray(raw?.menuItems).map((i: any) => ({
+    menuItems: readRecords<MenuItem>(raw.menuItems, 'menuItems', ['id', 'name']).map((i) => ({
       ...i,
       active: i?.active !== false,
       costPrice: asNum(i?.costPrice),
       stockQty: i?.stockQty == null ? 0 : asNum(i?.stockQty),
     })),
-    itemBills: asArray(raw?.itemBills),
-    expenses: asArray(raw?.expenses),
-    membershipSales: asArray(raw?.membershipSales),
-    logs: asArray(raw?.logs),
-    stats: raw?.stats ?? null,
+    itemBills: readRecords<ItemBill>(raw.itemBills, 'itemBills', ['id']),
+    expenses: readRecords<Expense>(raw.expenses, 'expenses', ['id', 'title']),
+    membershipSales: readRecords<MembershipSale>(raw.membershipSales, 'membershipSales', ['id', 'memberId']),
+    logs: readRecords<ActivityLog>(raw.logs, 'logs', ['id', 'message']),
+    stats: raw.stats as unknown as ClubStats,
   }
 }

@@ -164,3 +164,4 @@ don't need it; nothing in `src/` imports it.
   `VITE_GOOGLE_CLIENT_ID` as build-time env vars.
 - `npm run build` → `dist/`; `npm run preview` serves it locally.
 - `npm run lint` — zero-warning ESLint gate.
+- `npm test` — access-policy and async request-order regression tests (Node's built-in test runner).

@@ -18,6 +18,7 @@ import {
   TextInput,
 } from './ui'
 import type { ClubTable, MembershipPlan, PlanType } from '../types'
+import BrowserAlertsSettings from './BrowserAlertsSettings'
 
 // ------------------------------------------------------------- table modal
 
@@ -510,6 +511,7 @@ export default function SettingsScreen() {
 
         {/* ------------------------------------- Appearance (den_app settings parity) */}
         <AppearanceCard />
+        <BrowserAlertsSettings />
 
         {/* ---------------------------------------------------- Club settings */}
         <Card>

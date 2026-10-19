@@ -834,6 +834,7 @@ export default function TournamentsScreen() {
 
   return (
     <div className="stack">
+      <InsightsCard scopes={['tournaments']} tournaments={list} max={4} title="Smart Insights · Events" />
       <div className="page-head">
         <Btn variant="green" onClick={() => setCreating(true)}>
           <Plus size={13} /> New Tournament
@@ -846,8 +847,6 @@ export default function TournamentsScreen() {
         <StatCard label="Completed" tone="blue" value={completed} sub="records saved" />
         <StatCard label="Entries Collected" tone="green" value={formatCurrency(totalPool)} sub="across all events" />
       </div>
-
-      <InsightsCard scopes={['tournaments']} tournaments={list} max={4} title="Smart Insights · Events" />
 
       {list.length === 0 && !loading ? (
         <Card>

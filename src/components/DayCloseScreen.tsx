@@ -64,6 +64,7 @@ export default function DayCloseScreen() {
 
   return (
     <div className="stack">
+      <InsightsCard compact scopes={['finance', 'expenses', 'stock', 'revenue', 'members']} max={4} title="Smart Insights · Today" />
       <div className="page-head">
         <div className="row">
           <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value || todayKey())} aria-label="Date" />
@@ -74,8 +75,6 @@ export default function DayCloseScreen() {
       </div>
 
       {error && <div className="banner banner-error">{error}</div>}
-
-      <InsightsCard compact scopes={['finance', 'expenses', 'stock', 'revenue', 'members']} max={4} title="Smart Insights · Today" />
 
       {/* ---------------- headline numbers ---------------- */}
       <div className="grid-stats four">

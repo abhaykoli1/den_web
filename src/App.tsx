@@ -1,37 +1,39 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { hasAppAccess, useAuth } from './context/AuthContext'
 import { ClubProvider } from './context/ClubContext'
 import Layout from './components/Layout'
 import LoginScreen from './components/LoginScreen'
 import SubscriptionOnboardingScreen from './components/SubscriptionOnboardingScreen'
-import HomeScreen from './components/HomeScreen'
-import BookingsScreen from './components/BookingsScreen'
-import OrdersScreen from './components/OrdersScreen'
-import StockScreen from './components/StockScreen'
 import OnboardingScreen, { onboardingSeen } from './components/OnboardingScreen'
 import SplashScreen from './components/SplashScreen'
-import TablesScreen from './components/TablesScreen'
-import PlayersScreen from './components/PlayersScreen'
-import DueDeskScreen from './components/DueDeskScreen'
-import ItemsScreen from './components/ItemsScreen'
-import ExpensesScreen from './components/ExpensesScreen'
-import FinanceScreen from './components/FinanceScreen'
-import TournamentsScreen from './components/TournamentsScreen'
-import ItemBillsScreen from './components/ItemBillsScreen'
-import FramesScreen from './components/FramesScreen'
-import LogsScreen from './components/LogsScreen'
-import AdminScreen from './components/AdminScreen'
-import AdminDashboardScreen from './components/AdminDashboardScreen'
-import DayCloseScreen from './components/DayCloseScreen'
-import TeamScreen from './components/TeamScreen'
-import SettingsScreen from './components/SettingsScreen'
-import SupportScreen from './components/SupportScreen'
-import PrivacyScreen from './components/PrivacyScreen'
-import TermsScreen from './components/TermsScreen'
-import MasterAdminScreen from './components/MasterAdminScreen'
 import { Card, EmptyState } from './components/ui'
 import ErrorBoundary from './components/ErrorBoundary'
+
+const HomeScreen = lazy(() => import('./components/HomeScreen'))
+const BookingsScreen = lazy(() => import('./components/BookingsScreen'))
+const OrdersScreen = lazy(() => import('./components/OrdersScreen'))
+const StockScreen = lazy(() => import('./components/StockScreen'))
+const TablesScreen = lazy(() => import('./components/TablesScreen'))
+const PlayersScreen = lazy(() => import('./components/PlayersScreen'))
+const DueDeskScreen = lazy(() => import('./components/DueDeskScreen'))
+const ItemsScreen = lazy(() => import('./components/ItemsScreen'))
+const ExpensesScreen = lazy(() => import('./components/ExpensesScreen'))
+const FinanceScreen = lazy(() => import('./components/FinanceScreen'))
+const TournamentsScreen = lazy(() => import('./components/TournamentsScreen'))
+const ItemBillsScreen = lazy(() => import('./components/ItemBillsScreen'))
+const FramesScreen = lazy(() => import('./components/FramesScreen'))
+const LogsScreen = lazy(() => import('./components/LogsScreen'))
+const AdminScreen = lazy(() => import('./components/AdminScreen'))
+const AdminDashboardScreen = lazy(() => import('./components/AdminDashboardScreen'))
+const DayCloseScreen = lazy(() => import('./components/DayCloseScreen'))
+const TeamScreen = lazy(() => import('./components/TeamScreen'))
+const SettingsScreen = lazy(() => import('./components/SettingsScreen'))
+const SupportScreen = lazy(() => import('./components/SupportScreen'))
+const PrivacyScreen = lazy(() => import('./components/PrivacyScreen'))
+const TermsScreen = lazy(() => import('./components/TermsScreen'))
+const MasterAdminScreen = lazy(() => import('./components/MasterAdminScreen'))
+const AccountScreen = lazy(() => import('./components/AccountScreen'))
 
 /** Staff accounts never see the money-admin surfaces — bounce them home. */
 function AdminOnly({ children }: { children: JSX.Element }) {
@@ -62,36 +64,38 @@ export default function App() {
 
   return (
     <ClubProvider>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/home" element={<ErrorBoundary label="Home"><HomeScreen /></ErrorBoundary>} />
-          <Route path="/tables" element={ <ErrorBoundary label="Tables"> <TablesScreen /></ErrorBoundary>} />
-          <Route path="/bookings" element={<ErrorBoundary label="Bookings"><BookingsScreen /></ErrorBoundary>} />
-          <Route path="/orders" element={<ErrorBoundary label="Orders"><OrdersScreen /></ErrorBoundary>} />
-          <Route path="/players" element={<PlayersScreen />} />
-          <Route path="/due-desk" element={<DueDeskScreen />} />
-          <Route path="/items" element={<ErrorBoundary label="Items"><ItemsScreen /></ErrorBoundary>} />
-          {/* <Route path="/items" element={<ItemsScreen />} /> */}
-          <Route path="/stock" element={<ErrorBoundary label="Stock"><StockScreen /></ErrorBoundary>} />
-          <Route path="/item-bills" element={<ItemBillsScreen />} />
-          <Route path="/frames" element={<FramesScreen />} />
-          <Route path="/logs" element={<LogsScreen />} />
-          <Route path="/expenses" element={<ErrorBoundary label="Expenses"><AdminOnly><ExpensesScreen /></AdminOnly></ErrorBoundary>} />
-          <Route path="/finance" element={<ErrorBoundary label="Finance"><AdminOnly><FinanceScreen /></AdminOnly></ErrorBoundary>} />
-          <Route path="/tournaments" element={<TournamentsScreen />} />
-          {/* ★ v3.21 — sagli money-reports ek cockpit pe; purane sab routes waisi hi live hain */}
-          <Route path="/admin-dashboard" element={<ErrorBoundary label="Admin Dashboard"><AdminOnly><AdminDashboardScreen /></AdminOnly></ErrorBoundary>} />
-          <Route path="/admin" element={<ErrorBoundary label="Admin"><AdminOnly><AdminScreen /></AdminOnly></ErrorBoundary>} />
-          <Route path="/day-close" element={<ErrorBoundary label="Day Close"><AdminOnly><DayCloseScreen /></AdminOnly></ErrorBoundary>} />
-          <Route path="/team" element={<ErrorBoundary label="Team"><AdminOnly><TeamScreen /></AdminOnly></ErrorBoundary>} />
-          <Route path="/settings" element={<SettingsScreen />} />
-          <Route path="/support" element={<SupportScreen />} />
-          <Route path="/privacy" element={<PrivacyScreen />} />
-          <Route path="/terms" element={<TermsScreen />} />
-          <Route path="/master" element={<MasterAdminScreen />} />
-          <Route path="*" element={<Navigate to="/home" replace />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<SplashScreen />}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/home" element={<ErrorBoundary label="Home"><HomeScreen /></ErrorBoundary>} />
+            <Route path="/tables" element={<ErrorBoundary label="Tables"><TablesScreen /></ErrorBoundary>} />
+            <Route path="/bookings" element={<ErrorBoundary label="Bookings"><BookingsScreen /></ErrorBoundary>} />
+            <Route path="/orders" element={<ErrorBoundary label="Orders"><OrdersScreen /></ErrorBoundary>} />
+            <Route path="/players" element={<PlayersScreen />} />
+            <Route path="/due-desk" element={<DueDeskScreen />} />
+            <Route path="/items" element={<ErrorBoundary label="Items"><ItemsScreen /></ErrorBoundary>} />
+            <Route path="/stock" element={<ErrorBoundary label="Stock"><StockScreen /></ErrorBoundary>} />
+            <Route path="/item-bills" element={<ItemBillsScreen />} />
+            <Route path="/frames" element={<FramesScreen />} />
+            <Route path="/logs" element={<LogsScreen />} />
+            <Route path="/expenses" element={<ErrorBoundary label="Expenses"><AdminOnly><ExpensesScreen /></AdminOnly></ErrorBoundary>} />
+            <Route path="/finance" element={<ErrorBoundary label="Finance"><AdminOnly><FinanceScreen /></AdminOnly></ErrorBoundary>} />
+            <Route path="/tournaments" element={<TournamentsScreen />} />
+            {/* ★ v3.21 — sagli money-reports ek cockpit pe; purane sab routes waisi hi live hain */}
+            <Route path="/admin-dashboard" element={<ErrorBoundary label="Admin Dashboard"><AdminOnly><AdminDashboardScreen /></AdminOnly></ErrorBoundary>} />
+            <Route path="/admin" element={<ErrorBoundary label="Admin"><AdminOnly><AdminScreen /></AdminOnly></ErrorBoundary>} />
+            <Route path="/day-close" element={<ErrorBoundary label="Day Close"><AdminOnly><DayCloseScreen /></AdminOnly></ErrorBoundary>} />
+            <Route path="/team" element={<ErrorBoundary label="Team"><AdminOnly><TeamScreen /></AdminOnly></ErrorBoundary>} />
+            <Route path="/settings" element={<SettingsScreen />} />
+            <Route path="/account" element={<AccountScreen />} />
+            <Route path="/support" element={<SupportScreen />} />
+            <Route path="/privacy" element={<PrivacyScreen />} />
+            <Route path="/terms" element={<TermsScreen />} />
+            <Route path="/master" element={<MasterAdminScreen />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </ClubProvider>
   )
 }

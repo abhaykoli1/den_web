@@ -10,12 +10,13 @@ import {
 } from 'react'
 import { api, ApiError, asArray, normClubData } from '../lib/api'
 import { getActiveClubId, setActiveClubId } from '../lib/storage'
+import { RequestSequence } from '../lib/RequestSequence'
 import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import type { Club, ClubData, ClubStats } from '../types'
 
 interface MutateOptions {
-  method?: 'POST' | 'PATCH' | 'DELETE'
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   toast?: string
 }
@@ -33,7 +34,7 @@ interface ClubCtx {
   addClub: (name: string) => Promise<boolean>
   refresh: (silent?: boolean) => Promise<void>
   /** Mutating call inside the active club; toasts + auto-refresh afterwards. */
-  mutate: <T = any>(path: string, opts?: MutateOptions) => Promise<T | null>
+  mutate: <T = unknown>(path: string, opts?: MutateOptions) => Promise<T | null>
 }
 
 const Ctx = createContext<ClubCtx | null>(null)
@@ -48,6 +49,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const creatingClub = useRef(false)
+  const dataRequests = useRef(new RequestSequence())
+  const activeClubIdRef = useRef(activeClubId)
+  activeClubIdRef.current = activeClubId
 
   const club = useMemo(
     () => clubs.find((c) => c.id === activeClubId) ?? null,
@@ -56,10 +60,12 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   const loadData = useCallback(
     async (clubId: string, opts?: { silent?: boolean }) => {
+      const requestId = dataRequests.current.begin()
       if (!opts?.silent) setRefreshing(true)
       try {
-        const raw = await api(`/clubs/${clubId}/data`)
+        const raw = await api<unknown>(`/clubs/${clubId}/data`)
         const norm = normClubData(raw)
+        if (!dataRequests.current.isCurrent(requestId) || activeClubIdRef.current !== clubId) return
         setData(norm)
         // Keep the clubs list in sync with the freshly loaded club document
         // (name, logo, qrCode, settings.isOpen) — den_app does the same after
@@ -69,10 +75,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         }
         setError(null)
       } catch (e) {
-        const msg = e instanceof ApiError ? e.message : 'Failed to load club data'
-        setError(msg)
+        if (dataRequests.current.isCurrent(requestId) && activeClubIdRef.current === clubId) {
+          const msg = e instanceof ApiError ? e.message : 'Failed to load club data'
+          setError(msg)
+        }
       } finally {
-        setRefreshing(false)
+        if (dataRequests.current.isCurrent(requestId) && activeClubIdRef.current === clubId) {
+          setRefreshing(false)
+        }
       }
     },
     [],
@@ -99,8 +109,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
           try {
             await api('/clubs', { method: 'POST', body: { name: "Rowdy's Den" } })
             list = asArray<Club>(await api('/clubs'))
-          } catch {
-            /* plan/subscription edge — surface via banner */
+          } catch (e) {
+            if (!cancelled) {
+              setError(e instanceof ApiError ? e.message : 'Could not create your first club')
+            }
           } finally {
             creatingClub.current = false
           }
@@ -110,6 +122,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         const wanted = getActiveClubId()
         const found = list.find((c) => c.id === wanted)
         const chosen = found ?? list[0] ?? null
+        activeClubIdRef.current = chosen?.id ?? null
         setActive(chosen ? chosen.id : null)
         if (chosen) setActiveClubId(chosen.id)
       } catch (e) {
@@ -120,27 +133,41 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     })()
     return () => {
       cancelled = true
+      dataRequests.current.invalidate()
     }
   }, [user?.id])
 
   // ---- load consolidated data when the active club changes ----
   useEffect(() => {
+    dataRequests.current.invalidate()
     setData(null)
     setError(null)
     if (activeClubId) void loadData(activeClubId)
+    else setRefreshing(false)
+    return () => dataRequests.current.invalidate()
   }, [activeClubId, loadData])
 
   const switchClub = useCallback(
     (id: string) => {
+      if (user?.role === 'staff') return
       if (id === activeClubId) return
+      activeClubIdRef.current = id
+      dataRequests.current.invalidate()
+      setData(null)
+      setError(null)
+      setRefreshing(true)
       setActiveClubId(id)
       setActive(id)
     },
-    [activeClubId],
+    [activeClubId, user?.role],
   )
 
   const addClub = useCallback(
     async (name: string): Promise<boolean> => {
+      if (!user || user.role === 'staff') {
+        toast.error('Only Admin or Master Admin can add a club')
+        return false
+      }
       if (!name.trim()) {
         toast.error('Club name is required')
         return false
@@ -150,6 +177,11 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         toast.success(`Club created · ${created.name}`)
         setClubs((list) => [...list, created])
         await refreshUser()
+        activeClubIdRef.current = created.id
+        dataRequests.current.invalidate()
+        setData(null)
+        setError(null)
+        setRefreshing(true)
         setActiveClubId(created.id)
         setActive(created.id)
         return true
@@ -158,7 +190,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         return false
       }
     },
-    [toast, refreshUser],
+    [toast, refreshUser, user],
   )
 
   const mutate = useCallback(

@@ -177,7 +177,6 @@ export function AdminDashboardScreen() {
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [club?.id])
 
   // ---- derived numbers (all canonical keys, optional-chained) ------------
@@ -244,6 +243,7 @@ export function AdminDashboardScreen() {
 
   return (
     <div style={{ display: 'grid', gap: 10 }}>
+      <InsightsCard month={monthKey} report={mon as never} finance={fin as never} scopes={['finance', 'revenue', 'expenses']} />
       {/* ---- top stat cards ---- */}
       <div className="grid-stats">
         <StatCard
@@ -275,7 +275,7 @@ export function AdminDashboardScreen() {
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <LayoutDashboard size={14} aria-hidden />
-          <div style={{ fontWeight: 800, fontSize: 13 }}>Reports &amp; Admin Pages</div>
+          <div className="dashboard-card-heading">Reports &amp; Admin Pages</div>
         </div>
 
 
@@ -301,15 +301,12 @@ export function AdminDashboardScreen() {
           })}
         </div>
       </div>
- {/* ---- smart insights (existing engine reuse, no extra API call) ---- */}
-      <InsightsCard month={monthKey} report={mon as never} finance={fin as never} scopes={['finance', 'revenue', 'expenses']} />
-
       {/* ---- daily graph + income mix ---- */}
       <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 13 }}>Daily Income — last 14 days</div>
+              <div className="dashboard-card-heading">Daily Income — last 14 days</div>
               <div className="muted small">green income · red expenses · hover for totals</div>
             </div>
             <Btn variant="ghost" size="sm" loading={loading} onClick={() => void load()}>Reload</Btn>
@@ -318,7 +315,7 @@ export function AdminDashboardScreen() {
         </Card>
 
         <Card>
-          <div style={{ fontWeight: 800, fontSize: 13 }}>Income Mix — this month</div>
+          <div className="dashboard-card-heading">Income Mix — this month</div>
           <div className="muted small">total {formatCurrency(monthTotal)} · PAYMENT ledger</div>
           <HBars rows={srcRows} empty="Is month abhi koi income nahi — day close baad yahan dikhega." />
         </Card>
@@ -327,13 +324,13 @@ export function AdminDashboardScreen() {
       {/* ---- expense mix + P&L ---- */}
       <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
         <Card>
-          <div style={{ fontWeight: 800, fontSize: 13 }}>Expense Mix — this month</div>
+          <div className="dashboard-card-heading">Expense Mix — this month</div>
           <div className="muted small">total {formatCurrency(expMonth)}</div>
           <HBars rows={expCats} empty="Is month koi expense book nahi hua — clean month! 🎉" />
         </Card>
 
         <Card>
-          <div style={{ fontWeight: 800, fontSize: 13 }}>Profit &amp; Loss — this month</div>
+          <div className="dashboard-card-heading">Profit &amp; Loss — this month</div>
           <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
               <span className="muted">Income</span>

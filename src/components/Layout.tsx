@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity,
+  Beer,
   CalendarDays,
   Compass,
   Home,
@@ -42,7 +43,7 @@ import { useTheme } from '../context/ThemeContext'
 import { formatCurrency, todayLabel } from '../lib/format'
 import { APP_VERSION } from '../lib/version'
 import { getItem } from '../lib/storage'
-import { Btn, Modal, TextInput, EightBallLoader } from './ui'
+import { Btn, Modal, TextInput, Spinner } from './ui'
 
 type NavEntry = {
   label: string
@@ -86,17 +87,16 @@ const NAV: NavEntry[] = [
   },
   // ★ den_app parity — Home overview (workspace_hubs.dart HomeOverview) sabse upar.
   { to: '/home', label: 'Home', icon: Home, title: 'Home', subtitle: "Aaj ka pulse — live tables, dues, stock aur quick actions", section: 'Overview' },
+  { to: '/bookings', label: 'Bookings', icon: CalendarDays, title: 'Bookings', subtitle: 'Manage upcoming table reservations' },
+  { to: '/orders', label: 'Orders', icon: ShoppingBag, title: 'Orders', subtitle: 'Member app orders — pending, ready & completed' },
   { to: '/tables', label: 'Games', icon: Grid3x3, title: 'Games', subtitle: 'Live game billing · wallet & due auto-applied', section: 'Club' },
   { to: '/players', label: 'All Players', icon: Users, title: 'All Players', subtitle: 'Players, wallets, passes & dues' },
   { to: '/due-desk', label: 'Due Desk', icon: Wallet, title: 'Due Desk', subtitle: 'Manage player dues and payments' },
+  { to: '/tournaments', label: 'Tournaments', icon: Trophy, title: 'Tournaments', subtitle: 'Players & entry fees → knockout → match tables → champion' },
   { to: '/items', label: 'Item Billing', icon: ShoppingBag, title: 'Item Billing', subtitle: 'Counter sales — cafe, snacks & misc items', section: 'Records' },
   // ★ den_app Records hub ka Stock tab — item master, restock & reorder levels
   { to: '/stock', label: 'Stock', icon: Package, title: 'Stock', subtitle: 'Item master, photos, restock (auto-expense) & reorder levels' },
   { to: '/item-bills', label: 'Item Bills', icon: Receipt, title: 'Item Bills', subtitle: 'Counter item bills · history, receipts & dues' },
-  // ★ den_app parity — member-app bookings & orders (bookings_screen.dart / orders_screen.dart)
-  { to: '/bookings', label: 'Bookings', icon: CalendarDays, title: 'Bookings', subtitle: 'Manage upcoming table reservations' },
-  { to: '/orders', label: 'Orders', icon: ShoppingBag, title: 'Orders', subtitle: 'Member app orders — pending, ready & completed' },
-  { to: '/tournaments', label: 'Tournaments', icon: Trophy, title: 'Tournaments', subtitle: 'Players & entry fees → knockout → match tables → champion' },
   { to: '/frames', label: 'Frames', icon: History, title: 'Frame Bills', subtitle: 'Frame billing & history · winner corrections re-bill automatically' },
   { to: '/logs', label: 'Logs', icon: Activity, title: 'Activity Logs', subtitle: 'Billing, payments, warnings and admin actions' },
   { to: '/settings', label: 'Settings', icon: Settings, title: 'Settings', subtitle: 'Configure your club settings', section: 'General' },
@@ -110,6 +110,7 @@ const NAV: NavEntry[] = [
 // link karte hain) — title/subtitle lookup yahan rehta hai taaki direct-open
 // pe bhi header sahi bana rahe.
 const HIDDEN_PAGES: { to: string; title: string; subtitle: string }[] = [
+  { to: '/account', title: 'Account', subtitle: 'Your account and club shortcuts' },
   { to: '/day-close', title: 'Day Close · daily accounts', subtitle: 'Close the day and reconcile accounts' },
   { to: '/admin', title: 'Monthly Revenue Sheet', subtitle: 'Money received — frames, item bills, memberships, due collections' },
   { to: '/finance', title: 'Finance · P&L & Balance', subtitle: 'How much came in, went out, and stayed — the month-end account' },
@@ -127,6 +128,7 @@ export default function Layout() {
   const { clubs, club, activeClubId, switchClub, addClub, stats, refresh, refreshing, error } = useClub()
   const { theme, toggle } = useTheme()
   const location = useLocation()
+  const navigate = useNavigate()
   const mainRef = useRef<HTMLElement>(null)
 
   // Landing on any page → jump back to the very top (fresh view every time).
@@ -167,6 +169,7 @@ export default function Layout() {
 
   const sub = user?.role === 'master' ? null : user?.subscription
   const clubLimit = sub?.maxClubs ?? 1
+  const canManageClubs = user?.role === 'owner' || user?.role === 'master'
 
   const doAddClub = async () => {
     setSavingClub(true)
@@ -220,27 +223,37 @@ export default function Layout() {
           <div className="club-switch">
             <span className="field-label">Active Club · {clubs.length}/{user.role === 'master' ? '∞' : clubLimit}</span>
             <div className="club-switch-row">
-              <select
-                className="input select grow"
-                value={activeClubId ?? ''}
-                onChange={(e) => switchClub(e.target.value)}
-                aria-label="Active club"
-              >
-                {clubs.length === 0 && <option value="">No clubs yet</option>}
-                {clubs.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn-icon btn-icon-green"
-                aria-label="Add club"
-                title="Add another club"
-                onClick={() => setClubModal(true)}
-              >
-                <Plus size={14} />
-              </button>
+              {canManageClubs ? (
+                <>
+                  <select
+                  style={{height:30}}
+                    className="input select grow"
+                    value={activeClubId ?? ''}
+                    onChange={(e) => switchClub(e.target.value)}
+                    aria-label="Active club"
+                  >
+                    {clubs.length === 0 && <option value="">No clubs yet</option>}
+                    {clubs.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                   style={{height:30}}
+                    className="btn-icon btn-icon-green"
+                    aria-label="Add club"
+                    title="Add another club"
+                    onClick={() => setClubModal(true)}
+                  >
+                    <Plus size={14} />
+                  </button>
+                </>
+              ) : (
+                <div style={{height:30 , display:'flex', alignItems:'center'}} className="input grow" aria-label="Active club">
+                  {club?.name ?? 'No club assigned'}
+                </div>
+              )}
             </div>
             {/* today + due mini chips — owner's instant pulse, pinned under the club */}
             <div className="side-chips">
@@ -336,13 +349,13 @@ export default function Layout() {
 
       <div className="main">
         <header className="topbar">
-          <button className="btn-icon menu-btn" aria-label="Open menu" onClick={() => setDrawer(true)}>
+          <button className="btn-icon topbar-icon menu-btn" aria-label="Open menu" onClick={() => setDrawer(true)}>
             <Menu size={16} />
           </button>
           <span className="topbar-date">{todayLabel()}</span>
           <span className="spacer" />
           <button
-            className="btn-icon"
+            className="btn-icon topbar-icon"
             aria-label="Quick search (Ctrl K)"
             title="Quick search — member, table, item, page (Ctrl K)"
             data-tour="t-search"
@@ -352,7 +365,7 @@ export default function Layout() {
           </button>
           {club && (
             <button
-              className="btn-icon"
+              className="btn-icon topbar-icon"
               aria-label="Payment QR code"
               title="Payment QR code"
               onClick={() => setQrOpen(true)}
@@ -360,16 +373,16 @@ export default function Layout() {
               <QrCode size={15} />
             </button>
           )}
-          {club && <AlertsBell />}
-          {user?.role === 'master' ? (
-            <span className="badge badge-gold">Master Admin</span>
-          ) : sub ? (
+          {(club || user?.role === 'master') && <AlertsBell />}
+          {user?.role !== 'master' && sub ? (
             <span className={`badge ${sub.status === 'active' || sub.status === 'trial' ? 'badge-green' : 'badge-red'}`}>
               {sub.planName} · {sub.status}
             </span>
           ) : null}
           <span className="topbar-avatar">
-            <Avatar name={user?.name ?? ''} picture={user?.picture} />
+            <button className="account-avatar-button" aria-label="Open account" title="Account" onClick={() => navigate('/account')}>
+              <Avatar name={user?.name ?? ''} picture={user?.picture} />
+            </button>
           </span>
         </header>
 
@@ -396,24 +409,58 @@ export default function Layout() {
               )}
             </div>
           ) : refreshing && !error ? (
-            <div className="full-loader" style={{ marginTop: 60 }}>
-              <EightBallLoader size={52} />
+            <div className="full-loader" role="status" aria-label="Loading">
+              <Spinner size={40} />
             </div>
           ) : (
             <>
-              <h1 className="page-title">{title}</h1>
-              <div className="page-title-row">
-                <p className="page-subtitle">{subtitle}</p>
-                <button className="btn-icon title-refresh" aria-label="Refresh page data" title="Refresh data" onClick={doRefresh}>
-                  <RefreshCw size={13} className={(isMasterRoute ? maRefreshing : refreshing) ? 'spin' : ''} />
-                </button>
-              </div>
+              {location.pathname !== '/home' && location.pathname !== '/account' && (
+                <>
+                  <div className="page-title-row">
+                    <h1 className="page-title">{title}</h1>
+                    <button className="btn title-refresh" aria-label="Refresh page data" title="Refresh data" onClick={doRefresh}>
+                      <RefreshCw size={13} className={(isMasterRoute ? maRefreshing : refreshing) ? 'spin' : ''} />
+                    </button>
+                  </div>
+                  <div className="page-subtitle-row">
+                    <p className="page-subtitle">{subtitle}</p>
+                  </div>
+                </>
+              )}
               <WorkspaceTabs />
               <Outlet />
             </>
           )}
         </main>
       </div>
+
+      {club && (
+        <nav className="mobile-bottom-nav" aria-label="Main navigation">
+          {[
+            { label: 'Home', to: '/home', icon: Home, matches: ['/home'] },
+            { label: 'Club', to: '/tables', icon: Beer, matches: ['/tables', '/players', '/due-desk', '/frames', '/tournaments'] },
+            { label: 'Help', to: '/support', icon: Headset, matches: ['/support'] },
+            { label: 'Records', to: '/items', icon: Receipt, matches: ['/item-bills', '/items', '/stock', '/orders', '/logs'] },
+            { label: 'Bookings', to: '/bookings', icon: CalendarDays, matches: ['/bookings'] },
+          ].map(({ label, to, icon: Icon, matches }) => (
+            <NavLink
+              key={to}
+              to={to}
+              aria-label={label}
+              onClick={(event) => {
+                if (label === 'Help') {
+                  event.preventDefault()
+                  window.dispatchEvent(new Event('rd:care-open'))
+                }
+              }}
+              className={() => `mobile-bottom-nav-item${matches.some((path) => location.pathname.startsWith(path)) ? ' active' : ''}${label === 'Help' ? ' featured' : ''}`}
+            >
+              <Icon size={22} strokeWidth={2} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      )}
 
       <SupportChat />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
