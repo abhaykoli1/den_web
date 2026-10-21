@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, Suspense, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity,
@@ -111,12 +111,20 @@ const NAV: NavEntry[] = [
 // pe bhi header sahi bana rahe.
 const HIDDEN_PAGES: { to: string; title: string; subtitle: string }[] = [
   { to: '/account', title: 'Account', subtitle: 'Your account and club shortcuts' },
+  { to: '/settings/profile', title: 'My Profile', subtitle: 'Update your account name, phone and location' },
+  { to: '/settings/notifications', title: 'Browser Notifications', subtitle: 'Choose which browser alerts this device receives' },
+  { to: '/settings/club', title: 'Club Settings', subtitle: 'Club profile, payment QR and billing defaults' },
+  { to: '/settings/pricing', title: 'Game Pricing', subtitle: 'Configure game tables, rates and peak pricing' },
+  { to: '/settings/plans', title: 'Membership Plans', subtitle: 'Manage wallet, frame pass and monthly plans' },
   { to: '/day-close', title: 'Day Close · daily accounts', subtitle: 'Close the day and reconcile accounts' },
   { to: '/admin', title: 'Monthly Revenue Sheet', subtitle: 'Money received — frames, item bills, memberships, due collections' },
   { to: '/finance', title: 'Finance · P&L & Balance', subtitle: 'How much came in, went out, and stayed — the month-end account' },
   { to: '/expenses', title: 'Expenses', subtitle: 'Track and manage club expenses' },
   // /team ab sidebar NAV me hai (Admin block) — HIDDEN se hata diya.
 ]
+
+const CLUB_SWIPE_ROUTES = ['/tables', '/players', '/due-desk', '/frames']
+const RECORDS_SWIPE_ROUTES = ['/items', '/stock', '/orders', '/logs']
 
 function Avatar({ name, picture }: { name: string; picture?: string | null }) {
   if (picture) return <img className="avatar" src={picture} alt={name} referrerPolicy="no-referrer" />
@@ -144,6 +152,41 @@ export default function Layout() {
   const [tour, setTour] = useState(false)
   // den_app shell.dart → _showQrCode(): counter pe payment QR ek tap me.
   const [qrOpen, setQrOpen] = useState(false)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+
+  const onPageTouchStart = (event: ReactTouchEvent<HTMLElement>) => {
+    const touch = event.touches[0]
+    const target = event.target
+    if (!touch || !(target instanceof Element)) return
+    if (target.closest('button, a, input, select, textarea, [data-no-page-swipe], .table-scroll, .sh-scroll, .bracket, .ws-tabs')) return
+
+    const inClubWorkspace = CLUB_SWIPE_ROUTES.some((route) => location.pathname.startsWith(route))
+    const inRecordsWorkspace = RECORDS_SWIPE_ROUTES.some((route) => location.pathname.startsWith(route))
+    if (!inClubWorkspace && !inRecordsWorkspace) return
+    touchStart.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  const onPageTouchEnd = (event: ReactTouchEvent<HTMLElement>) => {
+    const start = touchStart.current
+    touchStart.current = null
+    const touch = event.changedTouches[0]
+    if (!start || !touch) return
+
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < 64 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return
+
+    const routes = CLUB_SWIPE_ROUTES.some((route) => location.pathname.startsWith(route))
+      ? CLUB_SWIPE_ROUTES
+      : RECORDS_SWIPE_ROUTES.some((route) => location.pathname.startsWith(route))
+        ? RECORDS_SWIPE_ROUTES
+        : null
+    if (!routes) return
+
+    const currentIndex = routes.findIndex((route) => location.pathname.startsWith(route))
+    const nextIndex = currentIndex + (deltaX < 0 ? 1 : -1)
+    if (currentIndex >= 0 && nextIndex >= 0 && nextIndex < routes.length) navigate(routes[nextIndex])
+  }
 
   // First visit on this device → auto-launch the walkthrough once.
   useEffect(() => {
@@ -154,6 +197,9 @@ export default function Layout() {
   }, [user, club])
 
   const current = useMemo(() => {
+    if (location.pathname.startsWith('/settings/')) {
+      return HIDDEN_PAGES.find((p) => location.pathname.startsWith(p.to))
+    }
     for (const n of NAV) {
       if (n.to && location.pathname.startsWith(n.to)) return n
       const child = n.children?.find((c) => location.pathname.startsWith(c.to))
@@ -379,6 +425,14 @@ export default function Layout() {
               {sub.planName} · {sub.status}
             </span>
           ) : null}
+          <button
+            className="btn-icon topbar-icon"
+            aria-label="Open settings"
+            title="Settings"
+            onClick={() => navigate('/settings')}
+          >
+            <Settings size={15} />
+          </button>
           <span className="topbar-avatar">
             <button className="account-avatar-button" aria-label="Open account" title="Account" onClick={() => navigate('/account')}>
               <Avatar name={user?.name ?? ''} picture={user?.picture} />
@@ -395,7 +449,7 @@ export default function Layout() {
           </div>
         )}
 
-        <main className="page" ref={mainRef}>
+        <main className="page" ref={mainRef} onTouchStart={onPageTouchStart} onTouchEnd={onPageTouchEnd}>
           {!club && !refreshing ? (
             <div className="empty" style={{ marginTop: 60 }}>
               <div className="empty-title">No club selected</div>
@@ -428,7 +482,9 @@ export default function Layout() {
                 </>
               )}
               <WorkspaceTabs />
-              <Outlet />
+              <Suspense fallback={<div className="page-route-loading" role="status" aria-label="Loading page"><Spinner size={30} /></div>}>
+                <Outlet />
+              </Suspense>
             </>
           )}
         </main>

@@ -87,6 +87,11 @@ export default function App() {
             <Route path="/day-close" element={<ErrorBoundary label="Day Close"><AdminOnly><DayCloseScreen /></AdminOnly></ErrorBoundary>} />
             <Route path="/team" element={<ErrorBoundary label="Team"><AdminOnly><TeamScreen /></AdminOnly></ErrorBoundary>} />
             <Route path="/settings" element={<SettingsScreen />} />
+            <Route path="/settings/profile" element={<SettingsScreen section="profile" />} />
+            <Route path="/settings/notifications" element={<SettingsScreen section="notifications" />} />
+            <Route path="/settings/club" element={<SettingsScreen section="club" />} />
+            <Route path="/settings/pricing" element={<SettingsScreen section="pricing" />} />
+            <Route path="/settings/plans" element={<SettingsScreen section="plans" />} />
             <Route path="/account" element={<AccountScreen />} />
             <Route path="/support" element={<SupportScreen />} />
             <Route path="/privacy" element={<PrivacyScreen />} />

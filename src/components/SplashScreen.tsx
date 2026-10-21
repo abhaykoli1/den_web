@@ -1,9 +1,10 @@
-// Branded splash — port of den_app `main.dart` → BrandSplashScreen.
-// Black canvas + square club logo while the saved session is restored.
+import { Spinner } from './ui'
+
 export default function SplashScreen() {
   return (
-    <div className="splash" role="status" aria-label="Rowdy's Den">
-      <img src="/icons/rowdys_den_logo_square.png" alt="Rowdy's Den" />
+    <div className="splash" role="status" aria-label="Loading Rowdy's Den">
+      <Spinner size={34} />
+      <span>Loading Rowdy's Den…</span>
     </div>
   )
 }

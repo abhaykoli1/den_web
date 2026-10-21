@@ -1,8 +1,7 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
   Activity,
   CalendarDays,
-  ChevronLeft,
   ChevronRight,
   Grid3x3,
   Headset,
@@ -81,23 +80,12 @@ function LinkGroup({ heading, links, tone = 'green' }: { heading: string; links:
 export default function AccountScreen() {
   const { user, logout } = useAuth()
   const { club } = useClub()
-  const navigate = useNavigate()
   const isAdmin = user?.role === 'owner' || user?.role === 'master'
 
   if (!user) return null
 
   return (
     <div className="account-page">
-      <div className="account-page-header">
-        <button className="account-back" onClick={() => navigate(-1)} aria-label="Go back">
-          <ChevronLeft size={24} />
-        </button>
-        <div>
-          <h1>Account</h1>
-          <p>{user.email}</p>
-        </div>
-      </div>
-
       <section className="account-profile">
         <AccountAvatar name={user.name} picture={user.picture} />
         <h2>{user.name}</h2>

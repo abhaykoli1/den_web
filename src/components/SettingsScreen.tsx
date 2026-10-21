@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { Download, FileJson, ImagePlus, Moon, Pencil, Plus, Power, Sun, Trash2, X } from 'lucide-react'
+import { Bell, Building2, ChevronRight, CreditCard, Download, FileJson, Gamepad2, ImagePlus, Moon, Pencil, Plus, Power, Sun, Trash2, UserRound, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useClub } from '../context/ClubContext'
 import { useTheme } from '../context/ThemeContext'
@@ -352,7 +353,6 @@ function ProfileCard() {
 
   return (
     <Card>
-      <div style={{ marginBottom: 5 }} className="section-title">My Profile</div>
       <p className="muted small" style={{ margin: '2px 0 6px' }}>
         Your login account ({user?.email}). Phone & city show to Master Admin and help support reach you.
       </p>
@@ -360,15 +360,25 @@ function ProfileCard() {
         <Field label="Display name"><TextInput value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="Phone number"><TextInput inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98XXXXXXXX" /></Field>
         <Field label="City / location"><TextInput value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Jaipur, Rajasthan" /></Field>
-        <span style={{ display: 'grid', marginTop: 15, gap: 6, gridTemplateColumns: '1fr auto' }}>
-          <Btn variant="green" size="sm" loading={busy} onClick={save} disabled={!name.trim()}>Save Profile</Btn>
-        </span>
+
+          <Btn variant="green"  loading={busy} onClick={save} disabled={!name.trim()}>Save Profile</Btn>
+
       </div>
     </Card>
   )
 }
 
-export default function SettingsScreen() {
+type SettingsSection = 'home' | 'profile' | 'notifications' | 'club' | 'pricing' | 'plans'
+
+const settingsLinks = [
+  { to: '/settings/profile', title: 'My Profile', description: 'Your name, phone number and location', icon: UserRound },
+  { to: '/settings/notifications', title: 'Browser Notifications', description: 'Choose which alerts appear on this device', icon: Bell },
+  { to: '/settings/club', title: 'Club Settings', description: 'Club profile, payment QR and billing defaults', icon: Building2 },
+  { to: '/settings/pricing', title: 'Game Pricing', description: 'Game tables, rates and peak pricing', icon: Gamepad2 },
+  { to: '/settings/plans', title: 'Membership Plans', description: 'Wallet, frame pass and monthly plans', icon: CreditCard },
+]
+
+export default function SettingsScreen({ section = 'home' }: { section?: SettingsSection }) {
   const { data, mutate } = useClub()
   const toast = useToast()
   const club = data?.club
@@ -381,7 +391,6 @@ export default function SettingsScreen() {
   // den_app parity — Club.qrCode (counter payment QR) + settings.isOpen
   const [qrCode, setQrCode] = useState<string | null | undefined>(undefined)
   const [savingClub, setSavingClub] = useState(false)
-  const [togglingOpen, setTogglingOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const qrRef = useRef<HTMLInputElement>(null)
 
@@ -429,19 +438,6 @@ export default function SettingsScreen() {
 
   const pickLogo = (file: File | undefined) => pickImage(file, 420, setLogo, 'Logo')
   const pickQr = (file: File | undefined) => pickImage(file, 640, setQrCode, 'QR code')
-
-  /** Club open / closed — den_app _ClubStatusSwitch (PATCH settings.isOpen). */
-  const isOpen = club?.settings?.isOpen !== false
-  const toggleOpen = async () => {
-    if (!club || togglingOpen) return
-    setTogglingOpen(true)
-    await mutate('settings', {
-      method: 'PATCH',
-      body: { isOpen: !isOpen },
-      toast: !isOpen ? 'Club is now OPEN' : 'Club marked CLOSED',
-    })
-    setTogglingOpen(false)
-  }
 
   const saveClub = async () => {
     if (!club) return
@@ -504,20 +500,34 @@ export default function SettingsScreen() {
   const previewQr = qrCode !== undefined ? qrCode : club?.qrCode ?? null
 
   return (
-    <div className="stack settings-grid" style={{ marginTop: 10 }}>
-      <div style={{ display: 'grid', flexDirection: 'column', gap: 10, alignItems: 'start' }}>
-        {/* ---------------------------------------------------- My profile (login account) */}
-        <ProfileCard />
+    <div className={`stack settings-grid${section === 'home' ? '' : ' settings-section-page'}`}>
+      {section === 'home' && (
+        <>
+          <div className="settings-links">
+            {settingsLinks.map((item) => (
+              <Link className="settings-link-card" to={item.to} key={item.to}>
+                <span className="settings-link-icon"><item.icon size={19} strokeWidth={2} aria-hidden="true" /></span>
+                <span className="settings-link-copy">
+                  <b>{item.title}</b>
+                  <span className="muted small">{item.description}</span>
+                </span>
+                <ChevronRight className="settings-link-chevron" size={19} aria-hidden="true" />
+              </Link>
+            ))}
+          </div>
+          <AppearanceCard />
+          <ExportCard />
+        </>
+      )}
 
-        {/* ------------------------------------- Appearance (den_app settings parity) */}
-        <AppearanceCard />
-        <BrowserAlertsSettings />
+      {section === 'profile' && <ProfileCard />}
+      {section === 'notifications' && <BrowserAlertsSettings />}
 
         {/* ---------------------------------------------------- Club settings */}
-        <Card>
-          <div className="section-head">
+      {section === 'club' && (
+        <div style={{marginTop:10}}>
+          {/* <div className="section-head">
             <div className="section-title">Club Settings</div>
-            {/* den_app HomeOverview ka club OPEN/CLOSED switch */}
             <span className="club-switch-toggle">
               <span className={`cs-label ${isOpen ? 'cs-open' : 'cs-closed'}`}>{isOpen ? 'OPEN' : 'CLOSED'}</span>
               <button
@@ -529,7 +539,7 @@ export default function SettingsScreen() {
                 aria-label={isOpen ? 'Club open. Switch to close club.' : 'Club closed. Switch to open club.'}
               />
             </span>
-          </div>
+          </div> */}
         <div className="logo-row">
           <div className="logo-preview">
             {previewLogo ? (
@@ -538,7 +548,7 @@ export default function SettingsScreen() {
               <span className="logo-empty">RD</span>
             )}
           </div>
-          <div className="stack-xs">
+          <div className="stack-xs" >
             <input
               ref={fileRef}
               type="file"
@@ -546,14 +556,16 @@ export default function SettingsScreen() {
               className="hidden-file"
               onChange={(e) => pickLogo(e.target.files?.[0])}
             />
-            <Btn size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+            <span style={{display:"flex", width:"100%", gap:6, alignItems:"center"}}>
+              <Btn size="sm" style={{width:"100%"}} variant="outline" onClick={() => fileRef.current?.click()}>
               <ImagePlus size={12} /> Upload Logo
             </Btn>
             {previewLogo && (
               <Btn size="sm" variant="ghost" className="danger-text" onClick={() => setLogo(null)}>
-                <X size={12} /> Remove Logo
+                <X size={12} />
               </Btn>
             )}
+            </span>
             <span className="muted small">PNG/JPG/WebP · auto-compressed to 420px</span>
           </div>
         </div>
@@ -571,14 +583,16 @@ export default function SettingsScreen() {
               className="hidden-file"
               onChange={(e) => pickQr(e.target.files?.[0])}
             />
-            <Btn size="sm" variant="outline" onClick={() => qrRef.current?.click()}>
+          <span style={{display:"flex", width:"100%", gap:6, alignItems:"center"}}>
+            <Btn size="sm" style={{width:"100%"}} variant="outline" onClick={() => qrRef.current?.click()}>
               <ImagePlus size={12} /> Upload Payment QR
             </Btn>
             {previewQr && (
               <Btn size="sm" variant="ghost" className="danger-text" onClick={() => setQrCode(null)}>
-                <X size={12} /> Remove QR
+                <X size={12} />
               </Btn>
             )}
+          </span>
             <span className="muted small">Topbar ke QR button se counter pe turant dikh jata hai</span>
           </div>
         </div>
@@ -589,18 +603,18 @@ export default function SettingsScreen() {
             <Field label="Due limit (₹)"><TextInput inputMode="decimal" value={dueLimit} onChange={(e) => setDueLimit(e.target.value)} /></Field>
             <Field label="Default advance (₹)"><TextInput inputMode="decimal" value={defaultAdvance} onChange={(e) => setDefaultAdvance(e.target.value)} /></Field>
             <Field label="Monthly fallback discount (%)"><TextInput inputMode="decimal" value={monthlyPct} onChange={(e) => setMonthlyPct(e.target.value)} /></Field>
-          </div>
-          <span style={{ display: 'grid', marginTop: 10, gap: 6, gridTemplateColumns: '1fr ' }}>
+          <span style={{ display: 'grid', gridTemplateColumns: '1fr' }}>
             <Btn variant="green" loading={savingClub} onClick={saveClub}>Save Settings</Btn>
           </span>
-        </Card>
-      </div>
+          </div>
+        </div>
+      )}
 
-      <div style={{ display: 'grid', flexDirection: 'column', gap: 10, alignItems: 'start' }}>
         {/* ---------------------------------------------------- Game pricing */}
-        <Card>
+      {section === 'pricing' && (
+        <div>
           <div className="section-head">
-            <div className="section-title">Game Pricing</div>
+            <div className="section-title"></div>
             <Btn size="sm" variant="green" onClick={() => setTableModal({ table: null })}>
               <Plus size={12} /> Add
             </Btn>
@@ -638,17 +652,19 @@ export default function SettingsScreen() {
             ))}
             {tables.length === 0 && <p className="muted small">No games yet.</p>}
           </div>
-        </Card>
+        </div>
+      )}
 
         {/* -------------------------------------------------- Member plans */}
-        <Card>
+      {section === 'plans' && (
+        <div>
           <div className="section-head">
-            <div className="section-title">Membership Plans</div>
+            <div className="section-title"> </div>
             <Btn size="sm" variant="green" onClick={() => setPlanModal({ plan: null })}>
               <Plus size={12} /> Add Plan
             </Btn>
           </div>
-          <p className="muted small">Wallet = prepaid credit · Pass = frame pack · Monthly = premium table % discount</p>
+          <p className="muted small">Wallet = prepaid credit</p>  <p className="muted small">Pass = frame pack </p>  <p className="muted small"> Monthly = premium table % discount</p>
           <div className="menu-list">
             {plans.map((p) => (
               <div key={p.id} className={`menu-row${p.active ? '' : ' inactive'}`}>
@@ -678,11 +694,8 @@ export default function SettingsScreen() {
             ))}
             {plans.length === 0 && <p className="muted small">No plans yet — create wallet, pass or monthly plans to sell to members.</p>}
           </div>
-        </Card>
-
-        {/* -------------------------------------------------- Data export */}
-        <ExportCard />
-      </div>
+        </div>
+      )}
 
       {tableModal && <TableModal onClose={() => setTableModal(null)} table={tableModal.table} />}
       {planModal && <PlanModal onClose={() => setPlanModal(null)} plan={planModal.plan} />}

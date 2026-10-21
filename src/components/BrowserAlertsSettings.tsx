@@ -7,7 +7,7 @@ import {
   type BrowserAlertKind,
   type BrowserAlertPreferences,
 } from '../lib/browserAlerts'
-import { Badge, Btn, Card } from './ui'
+import { Badge, Btn } from './ui'
 
 const ALERTS: Array<{ kind: BrowserAlertKind; title: string; description: string }> = [
   { kind: 'stock', title: 'Low stock', description: 'An active item reaches its reorder level or runs out.' },
@@ -65,15 +65,10 @@ export default function BrowserAlertsSettings() {
   }
 
   return (
-    <Card>
-      <div className="section-head">
-        <div className="section-title">Browser Notifications</div>
-        <Badge kind={preferences.enabled && permission === 'granted' ? 'green' : 'muted'}>
-          {permission === 'unsupported' ? 'Unsupported' : permission === 'denied' ? 'Blocked' : preferences.enabled ? 'On' : 'Off'}
-        </Badge>
-      </div>
+    <div>
+
       <p className="muted small">Optional system notifications for app alerts. Permission is requested only when you enable them.</p>
-      <div className="row wrap" style={{ gap: 8, marginBottom: 8 }}>
+      <div className="row wrap" style={{ gap: 8, marginBottom: 8 , display: 'flex', alignItems: 'center' , justifyContent: 'space-between'}}>
         <Btn size="sm" variant={preferences.enabled ? 'ghost' : 'green'} loading={busy} onClick={() => {
           if (preferences.enabled) update({ ...preferences, enabled: false })
           else void enable()
@@ -81,6 +76,9 @@ export default function BrowserAlertsSettings() {
           {preferences.enabled ? <BellOff size={12} /> : <Bell size={12} />}
           {preferences.enabled ? 'Turn off browser alerts' : 'Enable browser alerts'}
         </Btn>
+         <Badge kind={preferences.enabled && permission === 'granted' ? 'green' : 'muted'}>
+          {permission === 'unsupported' ? 'Unsupported' : permission === 'denied' ? 'Blocked' : preferences.enabled ? 'On' : 'Off'}
+        </Badge>
       </div>
       <div className="browser-alert-options">
         {ALERTS.map(({ kind, title, description }) => (
@@ -97,6 +95,6 @@ export default function BrowserAlertsSettings() {
           </label>
         ))}
       </div>
-    </Card>
+    </div>
   )
 }
