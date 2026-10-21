@@ -22,7 +22,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
+            <div >
+
             <App />
+            </div>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

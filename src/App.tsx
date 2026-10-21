@@ -63,9 +63,9 @@ export default function App() {
   if (!hasAppAccess(user)) return <SubscriptionOnboardingScreen />
 
   return (
-    <ClubProvider>
+    <ClubProvider >
       <Suspense fallback={<SplashScreen />}>
-        <Routes>
+        <Routes >
           <Route element={<Layout />}>
             <Route path="/home" element={<ErrorBoundary label="Home"><HomeScreen /></ErrorBoundary>} />
             <Route path="/tables" element={<ErrorBoundary label="Tables"><TablesScreen /></ErrorBoundary>} />
