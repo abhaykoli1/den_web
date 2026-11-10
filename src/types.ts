@@ -10,7 +10,7 @@ export type MemberType = 'regular' | 'wallet' | 'pass' | 'due' | 'monthly'
 export type MatchMode = 'solo' | '2v2'
 export type Team = 'A' | 'B'
 export type LogTag = 'BILLING' | 'PAYMENT' | 'WARNING' | 'ADMIN'
-export type BillStatus = 'paid' | 'unpaid' | 'partial'
+export type BillStatus = 'paid' | 'unpaid' | 'partial' | 'written_off'
 
 export interface AccountSubscription {
   planId?: string | null
@@ -21,6 +21,7 @@ export interface AccountSubscription {
   durationDays: number
   maxClubs: number
   selectedAt?: string | null
+  trialUsedAt?: string | null
   startsAt?: string | null
   expiresAt?: string | null
   notes?: string | null
@@ -39,6 +40,7 @@ export interface AppUser {
   active: boolean
   clubIds: string[]
   subscription?: AccountSubscription | null
+  trialUsedAt?: string | null
   createdAt?: string
   updatedAt?: string
   lastLoginAt?: string | null
@@ -82,6 +84,10 @@ export interface ClubSettings {
   currency: string
   currencySymbol: string
   monthlyTableDiscount: number
+  taxEnabled?: boolean
+  taxRate?: number
+  taxLabel?: string
+  gstin?: string
   /** Club open / closed for business (den_app: Club.isOpen). Absent = open. */
   isOpen?: boolean
 }
@@ -99,6 +105,7 @@ export interface Club {
 
 export interface TableRate {
   hourlyRate: number
+  billingMode?: 'hourly' | 'per_frame' | 'per_game' | 'flat'
   ratesByPlayers?: Record<string, number>
   minCharge: number
   peakHourlyRate?: number | null
@@ -112,6 +119,9 @@ export interface ClubTable {
   id: string
   clubId: string
   name: string
+  sport?: string
+  lightEnabled?: boolean
+  lightState?: 'on' | 'off'
   active: boolean
   rate: TableRate
   sortOrder: number
@@ -153,6 +163,18 @@ export interface Member {
   updatedAt?: string
 }
 
+export interface WalletTopupRequest {
+  id: string
+  memberName: string
+  amount: number
+  creditAmount?: number
+  bonusAmount?: number
+  planName?: string | null
+  utr: string
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt: string
+}
+
 export interface SessionPlayer {
   id: string
   slot: string
@@ -182,6 +204,12 @@ export interface ActiveSession {
   players: SessionPlayer[]
   playerCount: number
   hourlyRate: number
+  billingMode?: 'hourly' | 'per_frame' | 'per_game' | 'flat'
+  sport?: string
+  unitsPlayed?: number
+  taxEnabled?: boolean
+  taxRate?: number
+  taxLabel?: string
   minCharge: number
   matchMode: MatchMode
   itemsTotal: number
@@ -205,13 +233,17 @@ export interface SessionGlove {
 }
 
 export interface Settlement {
+  pid?: string
   memberId: string
   memberName?: string
+  charge?: number
   amount: number
   kind: 'wallet' | 'due'
   walletPart?: number
+  passPart?: number
   duePart?: number
   cashPart?: number
+  oldDuePart?: number
 }
 
 export interface FrameRecord {
@@ -232,6 +264,12 @@ export interface FrameRecord {
   itemsAmount: number
   items: BillLineItem[]
   hourlyRate: number
+  billingMode?: 'hourly' | 'per_frame' | 'per_game' | 'flat'
+  unitsPlayed?: number
+  taxableAmount?: number
+  taxAmount?: number
+  taxRate?: number
+  taxLabel?: string
   minCharge?: number
   winnerBonus: number
   discount: number
@@ -243,6 +281,10 @@ export interface FrameRecord {
   passMemberId?: string | null
   passMemberName?: string | null
   oldDueAmount?: number
+  oldDueIncluded?: boolean
+  oldDueIncludedAmount?: number
+  oldDueIncludedByMember?: Record<string, number>
+  oldDueNow?: number
   oldDueBefore?: Record<string, number>
   oldDuePaid?: Record<string, number>
   frameAmount?: number
@@ -255,6 +297,7 @@ export interface FrameRecord {
   paidRequested?: number | null
   paidAmount: number
   dueAmount: number
+  writtenOffAmount?: number
   paymentMode: PaymentMode
   requestedPaymentMode?: PaymentMode
   status: BillStatus
@@ -532,6 +575,7 @@ export interface DayCloseReport {
   topItems: Array<{ name: string; qty: number; revenue: number; profit: number }>
   liveSessions: number
   totalDueNow: number
+  closing: { cashCollected: number; expenses: number; drawerCash: number; upi: number; card: number; actualCash?: number | null; cashVariance?: number; reconciledAt?: string | null; reconciliationNote?: string }
 }
 
 export interface UtilisationReport {

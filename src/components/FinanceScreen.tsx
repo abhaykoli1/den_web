@@ -95,7 +95,7 @@ export default function FinanceScreen() {
     <div className="stack">
       <InsightsCard month={month} finance={fin} scopes={['finance', 'expenses', 'stock', 'revenue']} max={6} />
       <div className="page-head">
-        <div className="row">
+        <div className="row expense-controls">
           <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value || monthKey())} aria-label="Month" />
           <Btn variant="outline" onClick={() => setPdfOpen(true)} disabled={!fin}>
             <Printer size={13} /> PDF

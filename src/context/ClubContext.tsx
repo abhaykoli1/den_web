@@ -11,6 +11,7 @@ import {
 import { api, ApiError, asArray, normClubData } from '../lib/api'
 import { getActiveClubId, setActiveClubId } from '../lib/storage'
 import { RequestSequence } from '../lib/RequestSequence'
+import { setCurrencyDisplay } from '../lib/format'
 import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 import type { Club, ClubData, ClubStats } from '../types'
@@ -67,6 +68,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         const norm = normClubData(raw)
         if (!dataRequests.current.isCurrent(requestId) || activeClubIdRef.current !== clubId) return
         setData(norm)
+        setCurrencyDisplay(norm.club?.settings?.currency, norm.club?.settings?.currencySymbol)
         // Keep the clubs list in sync with the freshly loaded club document
         // (name, logo, qrCode, settings.isOpen) — den_app does the same after
         // every PATCH /clubs/{id}/settings.

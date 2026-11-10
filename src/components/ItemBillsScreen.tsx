@@ -105,7 +105,7 @@ export default function ItemBillsScreen() {
   return (
     <div className="stack">
       <div className="page-head">
-        <div className="search-box">
+        <div className="search-box item-bills-search">
           <Search size={13} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Customer, item or mode" aria-label="Search item bills" />
         </div>

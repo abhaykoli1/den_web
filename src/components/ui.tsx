@@ -1,5 +1,6 @@
 // Small shared UI primitives (plain CSS, compact operational style).
 import { useEffect, type HTMLAttributes, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2 } from 'lucide-react'
 
 export function Spinner({ size = 14 }: { size?: number }) {
@@ -107,7 +108,7 @@ export function Modal({ open, onClose, title, width = 460, children, footer }: M
   }, [open, onClose])
 
   if (!open) return null
-  return (
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: width }} role="dialog" aria-modal="true">
         <div className="modal-head">
@@ -119,7 +120,8 @@ export function Modal({ open, onClose, title, width = 460, children, footer }: M
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

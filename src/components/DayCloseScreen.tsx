@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Printer, TrendingDown, TrendingUp, Wallet2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useClub } from '../context/ClubContext'
+import { useAuth } from '../context/AuthContext'
 import { formatCurrency, formatNumber, titleCase } from '../lib/format'
 import { Badge, Btn, Card, StatCard, TextInput } from './ui'
 import PrintSheetModal, { SheetTable } from './PrintSheetModal'
@@ -35,18 +36,23 @@ const SOURCE_ORDER: Array<[string, string, keyof DayCloseReport['counts']]> = [
 
 export default function DayCloseScreen() {
   const { club } = useClub()
+  const { user } = useAuth()
   const [date, setDate] = useState(todayKey())
   const [rep, setRep] = useState<DayCloseReport | null>(null)
   const [, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pdfOpen, setPdfOpen] = useState(false)
+  const [actualCash, setActualCash] = useState('')
+  const [savingCash, setSavingCash] = useState(false)
 
   const load = useCallback(async () => {
     if (!club) return
     setLoading(true)
     setError(null)
     try {
-      setRep(await api<DayCloseReport>(`/clubs/${club.id}/reports/day-close?date=${date}`))
+      const report = await api<DayCloseReport>(`/clubs/${club.id}/reports/day-close?date=${date}`)
+      setRep(report)
+      setActualCash(report.closing.actualCash == null ? '' : String(report.closing.actualCash))
     } catch (e: any) {
       setError(e?.message || 'Could not load the day-close report')
     } finally {
@@ -61,13 +67,22 @@ export default function DayCloseScreen() {
   const net = rep?.net ?? 0
   const modeRows = MODE_ORDER.filter(([k]) => (rep?.byMode?.[k] ?? 0) > 0)
   const isToday = date === todayKey()
+  const saveCashCount = async () => {
+    if (!club || actualCash.trim() === '') return
+    setSavingCash(true)
+    try {
+      await api(`/clubs/${club.id}/reports/day-close`, { method: 'PUT', body: { date, actualCash: Number(actualCash) } })
+      await load()
+    } catch (e: any) { setError(e?.message || 'Could not save cash count') }
+    finally { setSavingCash(false) }
+  }
 
   return (
     <div className="stack">
       <InsightsCard compact scopes={['finance', 'expenses', 'stock', 'revenue', 'members']} max={4} title="Smart Insights · Today" />
       <div className="page-head">
-        <div className="row">
-          <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value || todayKey())} aria-label="Date" />
+        <div className="row dayclose-date-row">
+          <TextInput className="dayclose-date-input" type="date" value={date} onChange={(e) => setDate(e.target.value || todayKey())} aria-label="Date" />
           <Btn variant="outline" onClick={() => setPdfOpen(true)} disabled={!rep}>
             <Printer size={13} /> Print / PDF
           </Btn>
@@ -206,6 +221,8 @@ export default function DayCloseScreen() {
             <p className="muted small" style={{ marginTop: 2 }}>
               Count the cash in the drawer: {formatCurrency((rep?.byMode?.cash ?? 0) - (rep?.expenses.total ?? 0))} (cash collected {formatCurrency(rep?.byMode?.cash ?? 0)} − expenses {formatCurrency(rep?.expenses.total ?? 0)}). UPI/card {formatCurrency((rep?.byMode?.upi ?? 0) + (rep?.byMode?.card ?? 0))} should match your statements.
             </p>
+            {user?.role !== 'staff' && <div className="row" style={{ marginTop: 8, maxWidth: 400 }}><TextInput inputMode="decimal" placeholder="Counted cash in drawer" value={actualCash} onChange={(e) => setActualCash(e.target.value)} aria-label="Actual cash counted" /><Btn size="sm" variant="green" loading={savingCash} disabled={!actualCash.trim()} onClick={() => void saveCashCount()}>Reconcile cash</Btn></div>}
+            {rep?.closing.actualCash != null && <p className="small" style={{ marginTop: 6 }}>Counted {formatCurrency(rep.closing.actualCash)} · variance <b className={Math.abs(rep.closing.cashVariance ?? 0) < 0.01 ? 'money-green' : 'money-red'}>{formatCurrency(rep.closing.cashVariance ?? 0)}</b></p>}
           </div>
           <div className="dc-side">
             <Badge kind={net >= 0 ? 'green' : 'red'}>

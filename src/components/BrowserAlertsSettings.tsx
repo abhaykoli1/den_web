@@ -16,6 +16,7 @@ const ALERTS: Array<{ kind: BrowserAlertKind; title: string; description: string
   { kind: 'orders', title: 'Live orders', description: 'A new member-app order arrives.' },
   { kind: 'subscriptions', title: 'Subscriptions', description: 'A new subscription request arrives for Master Admin.' },
   { kind: 'bookings', title: 'Bookings', description: 'A new table booking arrives.' },
+  { kind: 'topups', title: 'Wallet top-ups', description: 'A member submits a wallet top-up request for verification.' },
 ]
 
 export default function BrowserAlertsSettings() {
@@ -67,7 +68,7 @@ export default function BrowserAlertsSettings() {
   return (
     <div>
 
-      <p className="muted small">Optional system notifications for app alerts. Permission is requested only when you enable them.</p>
+      <p className="muted small">Optional system notifications for app alerts. Keep den_web open to receive alerts; permission is requested only when you enable them.</p>
       <div className="row wrap" style={{ gap: 8, marginBottom: 8 , display: 'flex', alignItems: 'center' , justifyContent: 'space-between'}}>
         <Btn size="sm" variant={preferences.enabled ? 'ghost' : 'green'} loading={busy} onClick={() => {
           if (preferences.enabled) update({ ...preferences, enabled: false })

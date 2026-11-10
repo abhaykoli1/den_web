@@ -28,6 +28,9 @@ function TableModal({ onClose, table }: { onClose: () => void; table: ClubTable 
   const toast = useToast()
   const rate = table?.rate
   const [name, setName] = useState(table?.name ?? '')
+  const [sport, setSport] = useState(table?.sport ?? 'snooker')
+  const [billingMode, setBillingMode] = useState(table?.rate?.billingMode ?? 'hourly')
+  const [lightEnabled, setLightEnabled] = useState(table?.lightEnabled ?? false)
   const [hourly, setHourly] = useState(String(rate?.hourlyRate ?? ''))
   const [p2, setP2] = useState(String(rate?.ratesByPlayers?.['2'] ?? ''))
   const [p3, setP3] = useState(String(rate?.ratesByPlayers?.['3'] ?? ''))
@@ -61,6 +64,9 @@ function TableModal({ onClose, table }: { onClose: () => void; table: ClubTable 
     }
     const body = {
       name: name.trim(),
+      sport,
+      billingMode,
+      lightEnabled,
       hourlyRate: parseNum(hourly),
       ratesByPlayers,
       minCharge: parseNum(minCharge),
@@ -110,7 +116,10 @@ function TableModal({ onClose, table }: { onClose: () => void; table: ClubTable 
     >
       <div className="form-grid two">
         <Field label="Game name"><TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Pool / PS / Snooker" /></Field>
-        <Field label="Default hourly rate"><TextInput inputMode="decimal" value={hourly} onChange={(e) => setHourly(e.target.value)} placeholder="240" /></Field>
+        <Field label="Sport"><Select value={sport} onChange={(e) => setSport(e.target.value)}>{['snooker','pool','billiards','badminton','pickleball','table_tennis','tennis','box_cricket','football','basketball','gaming','arcade'].map((v) => <option key={v} value={v}>{titleCase(v)}</option>)}</Select></Field>
+        <Field label="Billing type"><Select value={billingMode} onChange={(e) => setBillingMode(e.target.value as typeof billingMode)}><option value="hourly">Per hour</option><option value="per_frame">Per frame</option><option value="per_game">Per game</option><option value="flat">Flat session</option></Select></Field>
+        <Field label="Smart table light"><Select value={lightEnabled ? 'on' : 'off'} onChange={(e) => setLightEnabled(e.target.value === 'on')}><option value="off">Disabled</option><option value="on">Enabled (demo simulation)</option></Select></Field>
+        <Field label={billingMode === 'hourly' ? 'Default hourly rate' : billingMode === 'flat' ? 'Flat session price' : 'Price per unit'}><TextInput inputMode="decimal" value={hourly} onChange={(e) => setHourly(e.target.value)} placeholder="240" /></Field>
         <Field label="2P rate (optional)"><TextInput inputMode="decimal" value={p2} onChange={(e) => setP2(e.target.value)} placeholder="blank = default" /></Field>
         <Field label="3P rate (optional)"><TextInput inputMode="decimal" value={p3} onChange={(e) => setP3(e.target.value)} /></Field>
         <Field label="4P rate (optional)"><TextInput inputMode="decimal" value={p4} onChange={(e) => setP4(e.target.value)} /></Field>
@@ -387,6 +396,11 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
   const [dueLimit, setDueLimit] = useState(String(club?.settings.dueLimit ?? 500))
   const [defaultAdvance, setDefaultAdvance] = useState(String(club?.settings.defaultAdvance ?? 0))
   const [monthlyPct, setMonthlyPct] = useState(String(club?.settings.monthlyTableDiscount ?? 0))
+  const [currency, setCurrency] = useState(club?.settings.currency ?? 'INR')
+  const [taxEnabled, setTaxEnabled] = useState(club?.settings.taxEnabled ?? false)
+  const [taxRate, setTaxRate] = useState(String(club?.settings.taxRate ?? 0))
+  const [taxLabel, setTaxLabel] = useState(club?.settings.taxLabel ?? 'GST')
+  const [gstin, setGstin] = useState(club?.settings.gstin ?? '')
   const [logo, setLogo] = useState<string | null | undefined>(undefined) // undefined = unchanged
   // den_app parity — Club.qrCode (counter payment QR) + settings.isOpen
   const [qrCode, setQrCode] = useState<string | null | undefined>(undefined)
@@ -463,6 +477,11 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
         dueLimit: parseNum(dueLimit),
         defaultAdvance: parseNum(defaultAdvance),
         monthlyTableDiscount: parseNum(monthlyPct),
+        currency,
+        taxEnabled,
+        taxRate: parseNum(taxRate),
+        taxLabel,
+        gstin,
       },
       toast: 'Club billing settings saved',
     })
@@ -475,6 +494,9 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
 
   const toggleTable = async (t: ClubTable) => {
     await mutate(`tables/${t.id}/toggle-active`, { toast: `Table ${t.active ? 'disabled' : 'enabled'} · ${t.name}` })
+  }
+  const toggleLight = async (t: ClubTable) => {
+    await mutate(`tables/${t.id}/light`, { method: 'POST', body: { state: 'toggle' }, toast: `Table light ${t.lightState === 'on' ? 'off' : 'on'} · ${t.name}` })
   }
   const togglePlan = async (p: MembershipPlan) => {
     await mutate(`plans/${p.id}/toggle-active`, { toast: `Plan ${p.active ? 'disabled' : 'enabled'} · ${p.name}` })
@@ -598,11 +620,13 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
         </div>
           <div className="form-grid two">
             <Field label="Club name"><TextInput value={name} onChange={(e) => setName(e.target.value)} /></Field>
-            <Field label="Currency"><div className="input-like">INR · ₹ (fixed)</div></Field>
-            <Field label="Winner bonus (₹)"><TextInput inputMode="decimal" value={winnerBonus} onChange={(e) => setWinnerBonus(e.target.value)} /></Field>
-            <Field label="Due limit (₹)"><TextInput inputMode="decimal" value={dueLimit} onChange={(e) => setDueLimit(e.target.value)} /></Field>
-            <Field label="Default advance (₹)"><TextInput inputMode="decimal" value={defaultAdvance} onChange={(e) => setDefaultAdvance(e.target.value)} /></Field>
+            <Field label="Currency"><Select value={currency} onChange={(e) => setCurrency(e.target.value)}>{[['INR','₹ Indian Rupee'],['USD','$ US Dollar'],['GBP','£ Pound'],['EUR','€ Euro'],['AED','د.إ Dirham'],['SGD','S$ Singapore Dollar'],['CAD','C$ Canadian Dollar'],['AUD','A$ Australian Dollar']].map(([code,label]) => <option key={code} value={code}>{code} · {label}</option>)}</Select></Field>
+            <Field label={`Winner bonus (${formatCurrency(0)})`}><TextInput inputMode="decimal" value={winnerBonus} onChange={(e) => setWinnerBonus(e.target.value)} /></Field>
+            <Field label={`Due limit (${formatCurrency(0)})`}><TextInput inputMode="decimal" value={dueLimit} onChange={(e) => setDueLimit(e.target.value)} /></Field>
+            <Field label={`Default advance (${formatCurrency(0)})`}><TextInput inputMode="decimal" value={defaultAdvance} onChange={(e) => setDefaultAdvance(e.target.value)} /></Field>
             <Field label="Monthly fallback discount (%)"><TextInput inputMode="decimal" value={monthlyPct} onChange={(e) => setMonthlyPct(e.target.value)} /></Field>
+            <Field label="Tax / GST"><Select value={taxEnabled ? 'on' : 'off'} onChange={(e) => setTaxEnabled(e.target.value === 'on')}><option value="off">Disabled</option><option value="on">Enabled</option></Select></Field>
+            {taxEnabled && <><Field label="Tax label"><TextInput value={taxLabel} onChange={(e) => setTaxLabel(e.target.value)} placeholder="GST" /></Field><Field label="Tax rate (%)"><TextInput inputMode="decimal" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} /></Field><Field label="GSTIN (optional)"><TextInput value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} /></Field></>}
           <span style={{ display: 'grid', gridTemplateColumns: '1fr' }}>
             <Btn variant="green" loading={savingClub} onClick={saveClub}>Save Settings</Btn>
           </span>
@@ -627,7 +651,8 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
                   {!t.active && <Badge kind="muted">disabled</Badge>}
                 </span>
                 <span className="muted small wrap">
-                  {formatCurrency(t.rate.hourlyRate)}/hr
+                  {formatCurrency(t.rate.hourlyRate)}{t.rate.billingMode === 'per_frame' ? '/frame' : t.rate.billingMode === 'per_game' ? '/game' : t.rate.billingMode === 'flat' ? '/session' : '/hr'}
+                  {' '}· {titleCase(t.sport ?? 'snooker')}{t.lightEnabled ? ` · Light ${t.lightState ?? 'off'} (simulated)` : ''}
                   {/* {t.rate.ratesByPlayers && Object.keys(t.rate.ratesByPlayers).length > 0 && (
                     <> · {Object.entries(t.rate.ratesByPlayers).map(([k, v]) => `${k}P ${formatCurrency(v)}`).join(' ')}</>
                   )} */}
@@ -638,6 +663,7 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
                   {(t.rate.glovePrice ?? 0) > 0 && <> · glove {formatCurrency(t.rate.glovePrice)}</>}
                 </span>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {t.lightEnabled && <button className="btn-icon" aria-label={`Toggle simulated light ${t.name}`} title={`Simulated light ${t.lightState ?? 'off'} · toggle`} onClick={() => void toggleLight(t)}><Sun size={12} className={t.lightState === 'on' ? 'money-gold' : 'muted'} /></button>}
                   <button className="btn-icon" aria-label={`${t.active ? 'Disable' : 'Enable'} ${t.name}`} title={t.active ? 'Disable' : 'Enable'} onClick={() => toggleTable(t)}>
                     <Power size={12} className={t.active ? 'ok' : 'off'} />
                   </button>

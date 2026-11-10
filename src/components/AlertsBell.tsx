@@ -1,19 +1,23 @@
 // Topbar alerts dropdown — low stock, due-limit pressure, expiring plans.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, CalendarClock, ChevronRight, PackageX, Scale, type LucideIcon } from 'lucide-react'
+import { Bell, CalendarClock, Check, ChevronRight, PackageX, Scale, Wallet, X, type LucideIcon } from 'lucide-react'
 import { useClub } from '../context/ClubContext'
 import { formatCurrency, formatDate } from '../lib/format'
 import { api, asArray } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
+import { Btn, ConfirmModal } from './ui'
 import {
   BROWSER_ALERTS_EVENT,
   browserAlertPreferences,
+  getAlertSnapshot,
   rememberAlertSnapshot,
+  saveAlertSnapshot,
   sendBrowserAlert,
   type BrowserAlertKind,
 } from '../lib/browserAlerts'
-import type { MemberOrder, TableBooking } from '../types'
+import type { MemberOrder, TableBooking, WalletTopupRequest } from '../types'
 
 interface ClubAlert {
   icon: LucideIcon
@@ -28,13 +32,37 @@ const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
 export default function AlertsBell() {
   const { data, club, refresh } = useClub()
   const { user } = useAuth()
+  const toast = useToast()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [alertSettingsVersion, setAlertSettingsVersion] = useState(0)
+  const [pendingTopups, setPendingTopups] = useState<WalletTopupRequest[]>([])
+  const [topupBusy, setTopupBusy] = useState<string | null>(null)
+  const [rejectingTopup, setRejectingTopup] = useState<WalletTopupRequest | null>(null)
+  const [topupError, setTopupError] = useState<string | null>(null)
 
   const notify = (kind: BrowserAlertKind, title: string, body: string, tag: string) => {
     const preferences = browserAlertPreferences()
-    if (preferences.enabled && preferences.kinds[kind]) sendBrowserAlert(title, body, tag)
+    if (preferences.enabled && preferences.kinds[kind]) void sendBrowserAlert(title, body, tag)
+  }
+
+  const updateTopup = async (request: WalletTopupRequest, action: 'approve' | 'reject') => {
+    if (!club || topupBusy) return
+    setTopupBusy(request.id)
+    try {
+      const result = await api<{ message: string }>(
+        `/clubs/${club.id}/portal/topup-requests/${request.id}/${action}`,
+        { method: 'POST', body: action === 'approve' ? { mode: 'upi' } : { reason: '' } },
+      )
+      setPendingTopups((current) => current.filter((entry) => entry.id !== request.id))
+      toast.success(result.message || (action === 'approve' ? 'Top-up approved' : 'Top-up rejected'))
+      if (action === 'reject') setRejectingTopup(null)
+      void refresh(true)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update the top-up request')
+    } finally {
+      setTopupBusy(null)
+    }
   }
 
   useEffect(() => {
@@ -42,6 +70,64 @@ export default function AlertsBell() {
     window.addEventListener(BROWSER_ALERTS_EVENT, sync)
     return () => window.removeEventListener(BROWSER_ALERTS_EVENT, sync)
   }, [])
+
+  useEffect(() => {
+    const clubId = club?.id
+    if (!clubId) {
+      setPendingTopups([])
+      setTopupError(null)
+      return
+    }
+
+    let active = true
+    let polling = false
+    const pollTopups = async () => {
+      if (polling) return
+      polling = true
+      try {
+        const response = await api<{ requests?: WalletTopupRequest[] }>(
+          `/clubs/${clubId}/portal/topup-requests?status=pending`,
+        )
+        if (!active) return
+        const requests = asArray<WalletTopupRequest>(response.requests)
+          .filter((request) => Boolean(request.id) && request.status === 'pending')
+        setTopupError(null)
+        const preferences = browserAlertPreferences()
+        const canNotify = preferences.enabled
+          && preferences.kinds.topups
+          && typeof Notification !== 'undefined'
+          && Notification.permission === 'granted'
+        if (canNotify) {
+          const notifiedKey = `browserAlertTopupsNotified:${clubId}`
+          const notified = new Set(getAlertSnapshot<string[]>(notifiedKey) ?? [])
+          for (const fresh of requests.filter((request) => !notified.has(request.id))) {
+            const displayed = await sendBrowserAlert(
+              'Wallet top-up needs verification',
+              `${fresh.memberName} · ${formatCurrency(fresh.amount)} · UPI ref ${fresh.utr}`,
+              `topup-${fresh.id}`,
+            )
+            if (displayed) notified.add(fresh.id)
+          }
+          saveAlertSnapshot(notifiedKey, [...notified])
+        }
+        setPendingTopups(requests)
+      } catch (error) {
+        if (active) {
+          console.error('Wallet top-up alert polling failed', error)
+          setTopupError(error instanceof Error ? error.message : 'Could not load wallet top-up requests')
+        }
+      } finally {
+        polling = false
+      }
+    }
+
+    void pollTopups()
+    const timer = window.setInterval(() => { void pollTopups() }, 60_000)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [club?.id, alertSettingsVersion])
 
   useEffect(() => {
     if (!data || !club) return
@@ -236,19 +322,71 @@ export default function AlertsBell() {
     <div className="alerts-wrap">
       <button
         className="btn-icon alerts-btn"
-        aria-label={alerts.length > 0 ? `${alerts.length} alerts` : 'No alerts'}
-        title={alerts.length > 0 ? `${alerts.length} alerts` : 'No alerts'}
+        aria-label={alerts.length + pendingTopups.length > 0 ? `${alerts.length + pendingTopups.length} alerts` : 'No alerts'}
+        title={alerts.length + pendingTopups.length > 0 ? `${alerts.length + pendingTopups.length} alerts` : 'No alerts'}
         onClick={() => setOpen((o) => !o)}
       >
         <Bell size={15} />
-        {alerts.length > 0 && <span className="alert-count">{alerts.length}</span>}
+        {alerts.length + pendingTopups.length > 0 && <span className="alert-count">{alerts.length + pendingTopups.length}</span>}
       </button>
       {open && (
         <>
           <div className="alerts-backdrop" onClick={() => setOpen(false)} />
           <div className="alerts-panel" role="menu">
-            <div className="alerts-head">Alerts · {alerts.length}</div>
-            {alerts.length === 0 ? (
+            <div className="alerts-head">Alerts · {alerts.length + pendingTopups.length}</div>
+            {pendingTopups.length > 0 && (
+              <section className="topup-review" aria-label="Wallet top-up approvals">
+                <div className="topup-review-head">
+                  <Wallet size={13} />
+                  <b>Wallet top-ups to verify</b>
+                  <span>{pendingTopups.length}</span>
+                </div>
+                <div className="topup-review-list">
+                  {pendingTopups.map((request) => (
+                    <div className="topup-review-card" key={request.id}>
+                      <div className="topup-review-info">
+                        <b>{request.memberName || 'Member'}</b>
+                        <strong>{formatCurrency(request.amount)} paid</strong>
+                        {(request.creditAmount ?? request.amount) !== request.amount && (
+                          <span>
+                            Wallet credit {formatCurrency(request.creditAmount ?? request.amount)}
+                            {request.planName ? ` · ${request.planName}` : ''}
+                            {` · ${formatCurrency(request.bonusAmount ?? ((request.creditAmount ?? request.amount) - request.amount))} bonus`}
+                          </span>
+                        )}
+                        <span>UPI ref {request.utr}</span>
+                        <small>{formatDate(request.createdAt)}</small>
+                      </div>
+                      <div className="topup-review-actions">
+                        <Btn
+                          size="sm"
+                          variant="green"
+                          loading={topupBusy === request.id}
+                          disabled={topupBusy !== null}
+                          onClick={() => void updateTopup(request, 'approve')}
+                        >
+                          <Check size={12} /> Approve
+                        </Btn>
+                        <Btn
+                          size="sm"
+                          variant="red"
+                          disabled={topupBusy !== null}
+                          onClick={() => setRejectingTopup(request)}
+                        >
+                          <X size={12} /> Reject
+                        </Btn>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            {topupError && (
+              <p className="topup-review-error" role="alert">
+                Wallet top-ups couldn’t be loaded: {topupError}. They will retry automatically.
+              </p>
+            )}
+            {alerts.length === 0 && pendingTopups.length === 0 ? (
               <p className="muted small" style={{ padding: '10px 12px' }}>All clear — nothing needs attention today 👍</p>
             ) : (
               alerts.map((a, i) => {
@@ -268,6 +406,17 @@ export default function AlertsBell() {
           </div>
         </>
       )}
+      <ConfirmModal
+        open={Boolean(rejectingTopup)}
+        onClose={() => { if (!topupBusy) setRejectingTopup(null) }}
+        onConfirm={() => { if (rejectingTopup) void updateTopup(rejectingTopup, 'reject') }}
+        busy={Boolean(rejectingTopup && topupBusy === rejectingTopup.id)}
+        title="Reject wallet top-up?"
+        message={rejectingTopup
+          ? `${rejectingTopup.memberName} · ${formatCurrency(rejectingTopup.amount)} · UPI ref ${rejectingTopup.utr}. The wallet will not be credited.`
+          : ''}
+        confirmLabel="Reject request"
+      />
     </div>
   )
 }

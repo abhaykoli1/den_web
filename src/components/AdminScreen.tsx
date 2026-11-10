@@ -88,7 +88,7 @@ export default function AdminScreen() {
     <div className="stack">
       <InsightsCard month={month} report={report} />
       <div className="page-head">
-        <div className="row">
+        <div className="row expense-controls">
           <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value || monthKey())} aria-label="Month" />
           <Btn variant="outline" onClick={() => setPdfOpen(true)} disabled={!report}>
             <Printer size={13} /> PDF

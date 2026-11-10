@@ -14,6 +14,14 @@ const minutesAgo = (m) => iso(now.getTime() - m * 60000)
 const todayKey = iso(now).slice(0, 10)
 
 const CLUB_ID = 'club-1'
+const sellerPlans = [
+  { id: 'sp_starter', name: 'Starter Monthly', description: 'Starter plan for one club', price: 499, billingCycle: 'monthly', durationDays: 30, trialDays: 7, maxClubs: 1, features: ['Tables & live billing', 'Players, memberships & dues', 'Inventory and item sales'], active: true, recommended: false, sortOrder: 1 },
+  { id: 'sp_starter_yearly', name: 'Starter Annual', description: 'Starter plan · save with annual billing', price: 4999, billingCycle: 'yearly', durationDays: 365, trialDays: 7, maxClubs: 1, features: ['Tables & live billing', 'Players, memberships & dues', 'Inventory and item sales'], active: true, recommended: false, sortOrder: 2 },
+  { id: 'sp_pro', name: 'Pro Monthly', description: 'Full club operations and reports', price: 999, billingCycle: 'monthly', durationDays: 30, trialDays: 14, maxClubs: 3, features: ['Tables & live billing', 'Players, memberships & dues', 'Inventory and item sales', 'Finance and daily reports', 'Tournaments', 'Staff permissions', 'Bookings'], active: true, recommended: true, sortOrder: 3 },
+  { id: 'sp_annual', name: 'Pro Annual', description: 'Pro plan · save with annual billing', price: 9999, billingCycle: 'yearly', durationDays: 365, trialDays: 14, maxClubs: 3, features: ['Tables & live billing', 'Players, memberships & dues', 'Inventory and item sales', 'Finance and daily reports', 'Tournaments', 'Staff permissions', 'Bookings'], active: true, recommended: false, sortOrder: 4 },
+  { id: 'sp_business', name: 'Business Monthly', description: 'Multi-club operations and advanced reports', price: 1999, billingCycle: 'monthly', durationDays: 30, trialDays: 14, maxClubs: 10, features: ['Tables & live billing', 'Players, memberships & dues', 'Inventory and item sales', 'Finance and daily reports', 'Tournaments', 'Staff permissions', 'Bookings', 'Up to 10 clubs', 'Priority support', 'Advanced utilization reports'], active: true, recommended: false, sortOrder: 5 },
+  { id: 'sp_business_yearly', name: 'Business Annual', description: 'Business plan · save with annual billing', price: 19999, billingCycle: 'yearly', durationDays: 365, trialDays: 14, maxClubs: 10, features: ['Tables & live billing', 'Players, memberships & dues', 'Inventory and item sales', 'Finance and daily reports', 'Tournaments', 'Staff permissions', 'Bookings', 'Up to 10 clubs', 'Priority support', 'Advanced utilization reports'], active: true, recommended: false, sortOrder: 6 },
+]
 
 const db = {
   user: {
@@ -193,7 +201,10 @@ createServer(async (req, res) => {
   if (path === '/auth/dev-mode') return send(res, 200, { enabled: true })
   if (path === '/auth/dev' || path === '/auth/google') {
     const body = await readBody(req)
-    if (body.email) db.user.email = body.email
+    if (body.email) {
+      db.user.email = body.email
+      db.user.role = body.email.toLowerCase() === 'master@rowdys.dev' ? 'master' : 'owner'
+    }
     if (body.name) db.user.name = body.name
     return send(res, 200, { user: db.user, token: 'mock-token' })
   }
@@ -202,7 +213,60 @@ createServer(async (req, res) => {
     return send(res, 200, db.user)
   }
   if (path === '/platform/support') return send(res, 200, { email: 'master@rowdys.dev', phone: '+91 98290 12345' })
-  if (path === '/subscription-plans') return send(res, 200, [])
+  if (path === '/subscription-plans' && method === 'GET') return send(res, 200, sellerPlans.filter((plan) => plan.active))
+  if (path === '/master/subscription-plans' && method === 'GET') return send(res, 200, sellerPlans)
+  if (path === '/master/overview') {
+    const master = { ...db.user, id: 'u-master', email: 'master@rowdys.dev', name: 'Master Admin', role: 'master', clubIds: [] }
+    const seller = { ...db.user, id: 'u-seller', email: 'owner@rowdysden.in', name: 'Abhay Koli', role: 'owner', clubIds: [CLUB_ID], clubNames: [db.club.name], subscription: { planId: 'sp_pro', planName: 'Pro Monthly', status: 'active', price: 999, billingCycle: 'monthly', maxClubs: 3 } }
+    const trialSeller = { ...seller, id: 'u-trial', email: 'trial@rowdysden.in', name: 'Ravi Sharma', clubIds: ['club-2'], clubNames: ['Cue Corner'], subscription: { planId: 'sp_starter', planName: 'Starter Monthly', status: 'trial', price: 499, billingCycle: 'monthly', maxClubs: 1, expiresAt: iso(now.getTime() + 86400000 * 6) } }
+    const pendingSeller = { ...seller, id: 'u-pending', email: 'pending@rowdysden.in', name: 'Neha Singh', clubIds: [], clubNames: [], subscription: { planId: 'sp_business', planName: 'Business Monthly', status: 'pending', price: 1999, billingCycle: 'monthly', maxClubs: 10, selectedAt: minutesAgo(90) } }
+    return send(res, 200, {
+      stats: { totalUsers: 3, activeUsers: 3, totalClubs: 2, activeSubscriptions: 2, monthlyRecurringRevenue: 1498 },
+      users: [seller, trialSeller, pendingSeller, master],
+      clubs: [{ ...db.club, ownerName: seller.name }, { id: 'club-2', name: 'Cue Corner', ownerName: trialSeller.name, ownerUserId: trialSeller.id, location: 'Jaipur', createdAt: minutesAgo(86400) }],
+    })
+  }
+  if (path === '/master/mailouts') return send(res, 200, [])
+  if (path === '/master/subscription-plans' && method === 'POST') {
+    const body = await readBody(req)
+    const plan = { ...body, id: `sp-demo-${Date.now()}`, createdAt: iso(Date.now()), updatedAt: iso(Date.now()) }
+    sellerPlans.push(plan)
+    return send(res, 201, plan)
+  }
+  if (path.startsWith('/master/subscription-plans/')) {
+    const [, , , planId, action] = path.split('/')
+    const index = sellerPlans.findIndex((plan) => plan.id === planId)
+    if (index < 0) return send(res, 404, { detail: 'Plan not found' })
+    if (action === 'toggle-active' && method === 'POST') {
+      sellerPlans[index].active = !sellerPlans[index].active
+      return send(res, 200, sellerPlans[index])
+    }
+    if (method === 'PATCH') {
+      Object.assign(sellerPlans[index], await readBody(req), { updatedAt: iso(Date.now()) })
+      return send(res, 200, sellerPlans[index])
+    }
+    if (method === 'DELETE') {
+      sellerPlans.splice(index, 1)
+      return send(res, 200, { ok: true })
+    }
+  }
+  if (path === '/account/subscription') return send(res, 200, { subscription: db.user.subscription })
+  if (path === '/account/subscription/select' && method === 'POST') {
+    const body = await readBody(req)
+    const plan = sellerPlans.find((p) => p.id === body.planId && p.active)
+    if (!plan) return send(res, 404, { detail: 'That plan is not available' })
+    const canTrial = plan.trialDays > 0 && !db.user.trialUsedAt
+    const selectedAt = iso(Date.now())
+    const subscription = {
+      planId: plan.id, planName: plan.name, status: canTrial ? 'trial' : 'pending',
+      price: plan.price, billingCycle: plan.billingCycle, durationDays: plan.durationDays,
+      maxClubs: plan.maxClubs, selectedAt, notes: '', updatedAt: selectedAt,
+      ...(canTrial ? { startsAt: selectedAt, expiresAt: iso(Date.now() + plan.trialDays * 86400000), trialUsedAt: selectedAt } : {}),
+    }
+    db.user.subscription = subscription
+    if (canTrial) db.user.trialUsedAt = selectedAt
+    return send(res, 200, { user: db.user, subscription })
+  }
 
   // ---- clubs ----
   if (path === '/clubs' && method === 'GET') return send(res, 200, [db.club])

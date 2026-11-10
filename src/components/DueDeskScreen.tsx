@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { BadgeCheck, Banknote, Gamepad2, Mail, MessageCircle, Search, UserRound, X } from 'lucide-react'
+import { BadgeCheck, Banknote, Gamepad2, Mail, MessageCircle, Receipt, Search, Trash2, UserRound, X } from 'lucide-react'
 import { useClub } from '../context/ClubContext'
+import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { formatCurrency, formatDateTime, titleCase } from '../lib/format'
 import { Badge, Btn, Card, EmptyState, Modal, Seg, StatCard, TextInput } from './ui'
@@ -94,14 +95,85 @@ function MemberGamesModal({ member, frames, onClose }: { member: Member; frames:
   )
 }
 
-function DueRow({ member, clubName, frames }: { member: Member; clubName: string; frames: FrameRecord[] }) {
+function MemberTotalBillModal({ member, frames, onClose }: { member: Member; frames: FrameRecord[]; onClose: () => void }) {
+  const history = useMemo(
+    () => frames
+      .filter((frame) => frame.players.some((player) => memberIdOf(player) === member.id))
+      .sort((a, b) => (b.createdAt || b.startedAt).localeCompare(a.createdAt || a.startedAt))
+      .map((frame) => {
+        const player = frame.players.find((entry) => memberIdOf(entry) === member.id)
+        const line = (frame.settlements ?? []).find((entry) =>
+          entry.memberId === member.id || (!!player && entry.pid === (player.pid ?? player.id)))
+        const oldDueIncluded = frame.oldDueIncluded
+          ? Number(frame.oldDueIncludedByMember?.[member.id] ?? frame.oldDueBefore?.[member.id] ?? 0)
+          : 0
+        const oldDuePaid = Number(line?.oldDuePart ?? frame.oldDuePaid?.[member.id] ?? 0)
+        return {
+          frame,
+          charge: Number(line?.charge ?? line?.amount ?? 0) + oldDueIncluded,
+          covered: Number(line?.walletPart ?? 0) + Number(line?.passPart ?? 0) + Number(line?.cashPart ?? 0) + oldDuePaid,
+          dueWhenBilled: Number(line?.duePart ?? 0) + Math.max(0, oldDueIncluded - oldDuePaid),
+          oldDuePaid,
+          won: player?.isWinner === true || (!!player && (frame.winners ?? []).includes(player.label)),
+          detailAvailable: Boolean(line) || player?.isWinner === true || (!!player && (frame.winners ?? []).includes(player.label)),
+        }
+      }),
+    [frames, member.id],
+  )
+  const totals = history.reduce((sum, row) => ({
+    billed: sum.billed + row.charge,
+    covered: sum.covered + row.covered,
+    due: sum.due + row.dueWhenBilled,
+  }), { billed: 0, covered: 0, due: 0 })
+
+  return (
+    <Modal open onClose={onClose} title={`Total Bill · ${member.name}`} width={620}>
+      <div className="member-games-content">
+        <div className="grid-stats four member-games-stats">
+          <StatCard label="Total billed" value={formatCurrency(totals.billed)} tone="blue" />
+          <StatCard label="Covered in frames" value={formatCurrency(totals.covered)} tone="green" />
+          <StatCard label="Due when billed" value={formatCurrency(totals.due)} tone="red" />
+          <StatCard label="Current due" value={formatCurrency(member.dueAmount)} tone="red" />
+        </div>
+        {history.length === 0 ? (
+          <EmptyState title="No previous bills" hint="This member has no billed frame history yet." icon={<Receipt size={26} />} />
+        ) : (
+          <div className="record-list member-games-list">
+            {history.map(({ frame, charge, covered, dueWhenBilled, oldDuePaid, won, detailAvailable }) => (
+              <div className="record-item member-game-item" key={frame.id}>
+                <div className="member-game-heading">
+                  <Receipt size={16} className="money-green" />
+                  <strong>{titleCase(frame.tableName)}</strong>
+                  <span className="member-game-opponents">{formatDateTime(frame.startedAt)}</span>
+                </div>
+                <div className="member-game-meta">
+                  <span>
+                    {won && charge === 0 ? 'Winner · no amount charged' : detailAvailable ? <>
+                      Covered {formatCurrency(covered)} · <span className="money-red">Due then {formatCurrency(dueWhenBilled)}</span>
+                      {oldDuePaid > 0 && <> · Old due collected {formatCurrency(oldDuePaid)}</>}
+                    </> : 'Detailed split unavailable for this older bill'}
+                  </span>
+                  <b>{formatCurrency(charge)}</b>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function DueRow({ member, clubName, frames, canManageDue }: { member: Member; clubName: string; frames: FrameRecord[]; canManageDue: boolean }) {
   const { mutate } = useClub()
   const toast = useToast()
   const [collecting, setCollecting] = useState(false)
   const [gamesOpen, setGamesOpen] = useState(false)
+  const [billOpen, setBillOpen] = useState(false)
   const [amount, setAmount] = useState(() => String(member.dueAmount))
   const [mode, setMode] = useState<PlanPaymentMode>('cash')
   const [busy, setBusy] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const collect = async () => {
     const amt = parseNum(amount)
@@ -125,6 +197,16 @@ function DueRow({ member, clubName, frames }: { member: Member; clubName: string
     }
   }
 
+  const writeOffDue = async () => {
+    setBusy(true)
+    const result = await mutate<{ ok: boolean }>(`members/${member.id}/due`, {
+      method: 'DELETE',
+      toast: `Due written off · ${member.name} · ${formatCurrency(member.dueAmount)}`,
+    })
+    setBusy(false)
+    if (result) setDeleteOpen(false)
+  }
+
   return (
     <Card className="due-row due-member-card">
       <div className="due-member-head">
@@ -140,6 +222,9 @@ function DueRow({ member, clubName, frames }: { member: Member; clubName: string
       </div>
       <div className="due-member-actions">
         <Badge kind="muted">WALLET <b className="money-gold">{formatCurrency(member.walletBalance)}</b></Badge>
+        <button className="due-total-bill" type="button" aria-label={`Show total bill for ${member.name}`} onClick={() => setBillOpen(true)}>
+          Total bill
+        </button>
       </div>
       <div className="due-card-actions">
         <button className="player-action player-action-wallet" type="button" aria-label={`View previous games for ${member.name}`} title="Previous games" onClick={() => setGamesOpen(true)}>
@@ -173,6 +258,17 @@ function DueRow({ member, clubName, frames }: { member: Member; clubName: string
             <Mail size={15} /><span>Email</span>
           </button>
         )}
+        {canManageDue && (
+          <button
+            className="player-action player-action-delete"
+            type="button"
+            aria-label={`Write off due for ${member.name}`}
+            title="Write off outstanding due"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 size={15} /><span>Delete</span>
+          </button>
+        )}
       </div>
       {collecting && (
         <div className="due-collect-form">
@@ -197,11 +293,30 @@ function DueRow({ member, clubName, frames }: { member: Member; clubName: string
         </div>
       )}
       {gamesOpen && <MemberGamesModal member={member} frames={frames} onClose={() => setGamesOpen(false)} />}
+      {billOpen && <MemberTotalBillModal member={member} frames={frames} onClose={() => setBillOpen(false)} />}
+      <Modal
+        open={deleteOpen}
+        onClose={() => { if (!busy) setDeleteOpen(false) }}
+        title={`Write off due · ${member.name}`}
+        width={380}
+        footer={
+          <>
+            <Btn variant="ghost" disabled={busy} onClick={() => setDeleteOpen(false)}>Keep due</Btn>
+            <Btn variant="red" loading={busy} onClick={() => void writeOffDue()}>
+              <Trash2 size={13} /> Write off due
+            </Btn>
+          </>
+        }
+      >
+        <p className="small">Remove {formatCurrency(member.dueAmount)} from this player’s pending due? It will be removed from due totals and outstanding frame balances, and won’t be recorded as collected income.</p>
+        <p className="small muted">This action will be saved in Activity Logs.</p>
+      </Modal>
     </Card>
   )
 }
 
 export default function DueDeskScreen() {
+  const { user } = useAuth()
   const { data } = useClub()
   const [search, setSearch] = useState('')
   useSearchSeed(setSearch)
@@ -238,7 +353,7 @@ export default function DueDeskScreen() {
       ) : (
         <div className="stack-sm">
           {dueMembers.map((m) => (
-            <DueRow key={m.id} member={m} clubName={data?.club.name ?? 'Club'} frames={data?.frames ?? []} />
+            <DueRow key={m.id} member={m} clubName={data?.club.name ?? 'Club'} frames={data?.frames ?? []} canManageDue={user?.role !== 'staff'} />
           ))}
         </div>
       )}

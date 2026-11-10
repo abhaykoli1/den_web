@@ -167,7 +167,7 @@ export default function ExpensesScreen() {
     <div className="stack">
       <InsightsCard month={month} scopes={['expenses', 'finance']} max={4} title="Smart Insights · Expenses" />
       <div className="page-head">
-        <div className="row">
+        <div className="row expense-controls">
           <TextInput type="month" value={month} onChange={(e) => setMonth(e.target.value || monthKey())} aria-label="Month" />
           <Btn variant="green" onClick={() => setModal(true)}>
             <Plus size={13} /> Add Expense

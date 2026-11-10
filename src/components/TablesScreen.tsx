@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRightLeft, Banknote, Hand, IndianRupee, Minus, Pencil, Play, Plus, RotateCcw, Square, StickyNote, UserPlus } from 'lucide-react'
+import { ArrowRightLeft, Banknote, Hand, IndianRupee, Minus, Pencil, Play, Plus, RotateCcw, Square, StickyNote, Trash2, UserPlus } from 'lucide-react'
 import { useClub } from '../context/ClubContext'
+import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import {
   calcTableAmount,
@@ -815,8 +816,10 @@ interface Estimate {
   passFramesLeft: number | null
   passMessage: string | null
   frameAmount: number
+  oldDueAvailable: number
   oldDue: number
   total: number
+  taxAmount: number
   walletCover: number
   walletBy: Array<{ name: string; amount: number }>
   losers: SessionPlayer[]
@@ -830,15 +833,20 @@ function estimateBill(
   qty: Record<string, number>,
   menu: MenuItem[],
   discountIn: number,
-  settings: { winnerBonus: number; monthlyTableDiscount: number },
+  settings: { winnerBonus: number; monthlyTableDiscount: number; taxEnabled?: boolean; taxRate?: number },
   usePass: boolean,
+  unitsPlayed = 1,
+  includeOldDue = false,
 ): Estimate {
-  const { amount: tableAmount, minutes } = calcTableAmount(
+  const timed = calcTableAmount(
     session.startedAt,
     session.endedAt!,
     session.hourlyRate,
     session.minCharge,
   )
+  const mode = session.billingMode ?? 'hourly'
+  const minutes = timed.minutes
+  const tableAmount = mode === 'hourly' ? timed.amount : Math.max(session.minCharge || 0, (session.hourlyRate || 0) * (mode === 'flat' ? 1 : unitsPlayed))
   const items = menu.filter((m) => (qty[m.id] ?? 0) > 0)
   const attachedItems = session.items ?? []
   const attachedTotal = attachedItems.reduce((s, l) => s + (l.amount ?? 0), 0)
@@ -898,12 +906,11 @@ function estimateBill(
   const passCredit = usePass
     ? Math.round(passMembers.reduce((sum) => sum + Math.min(session.hourlyRate, passEligibleShare), 0) * 100) / 100
     : 0
-  const frameAmount =
-    Math.max(
-      0,
-      Math.round((tableAmount + itemsTotal + bonus - manualDiscount - membershipDiscount) * 100) / 100,
-    ) + gloveCharges
-  const oldDue = losingMembers.reduce((s, m) => s + (m.dueAmount || 0), 0)
+  const taxable = Math.max(0, tableAmount + itemsTotal + bonus + gloveCharges - manualDiscount - membershipDiscount)
+  const taxAmount = settings.taxEnabled ? Math.round(taxable * (settings.taxRate || 0)) / 100 : 0
+  const frameAmount = Math.max(0, Math.round((tableAmount + itemsTotal + bonus - manualDiscount - membershipDiscount) * 100) / 100) + gloveCharges + taxAmount
+  const oldDueAvailable = losingMembers.reduce((s, m) => s + (m.dueAmount || 0), 0)
+  const oldDue = includeOldDue ? oldDueAvailable : 0
   const total = frameAmount + oldDue
   const share = losers.length ? frameAmount / losers.length : 0
   const walletBy = losingMembers
@@ -924,12 +931,13 @@ function estimateBill(
     tableAmount, minutes, itemsTotal, itemLines, gloveCharges, gloveMissing: glovesOut.length, bonus, manualDiscount,
     membershipDiscount, membershipPct: pct, membershipName: name,
     passCredit, passName, passMemberIds, passFramesLeft, passMessage, frameAmount, oldDue, total,
-    walletCover, walletBy, losers, losingMembers,
+    walletCover, walletBy, losers, losingMembers, taxAmount, oldDueAvailable,
   }
 }
 
 function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; session: ActiveSession; onConfirmed?: (frame: FrameRecord) => void }) {
   const { data, stats, mutate } = useClub()
+  const { user } = useAuth()
   const toast = useToast()
   const members = data?.members ?? []
   const menu = (data?.menuItems ?? []).filter((m) => m.active)
@@ -943,9 +951,14 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
     Object.fromEntries((session.items ?? []).map((item) => [item.itemId, item.qty])),
   )
   const [discount, setDiscount] = useState('0')
+  const [unitsPlayed, setUnitsPlayed] = useState('1')
+  const [includeOldDue, setIncludeOldDue] = useState(false)
+  const [confirmOldDueOpen, setConfirmOldDueOpen] = useState(false)
   const [mode, setMode] = useState<PaymentMode | 'pass' | null>(null)
   const [paid, setPaid] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const [editingGuest, setEditingGuest] = useState<SessionPlayer | null>(null)
   const [guestName, setGuestName] = useState('')
   const [guestSaving, setGuestSaving] = useState(false)
@@ -967,16 +980,18 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
         qty,
         menu,
         parseNum(discount),
-        { winnerBonus: settings?.winnerBonus ?? 0, monthlyTableDiscount: settings?.monthlyTableDiscount ?? 0 },
+        { winnerBonus: settings?.winnerBonus ?? 0, monthlyTableDiscount: settings?.monthlyTableDiscount ?? 0, taxEnabled: settings?.taxEnabled, taxRate: settings?.taxRate },
         mode === 'pass' || mode === null,
+        Math.max(1, Math.trunc(parseNum(unitsPlayed, 1))),
+        includeOldDue,
       ),
-    [session, losers, validSides, memberById, qty, menu, discount, settings, mode],
+    [session, losers, validSides, memberById, qty, menu, discount, settings, mode, unitsPlayed, includeOldDue],
   )
 
   // Prefer a frame pass for an eligible payer, then wallet, until the cashier chooses a mode.
   const fallbackMode: PaymentMode | 'pass' = est.passMemberIds.length
     ? 'pass'
-    : est.losingMembers.some((m) => (m.walletBalance ?? 0) > 0) ? 'wallet' : 'cash'
+    : est.losingMembers.some((m) => (m.walletBalance ?? 0) > 0) ? 'wallet' : 'due'
   const autoMode: PaymentMode | 'pass' = mode ?? fallbackMode
   const isDue = autoMode === 'due'
   const isPass = autoMode === 'pass'
@@ -987,15 +1002,18 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
   const walletUsed = isDue ? 0 : est.walletCover
   const passPaid = isPass ? est.passCredit : 0
   const estDueLeft = Math.max(0, Math.round((est.total - walletUsed - passPaid - advance - paidNum) * 100) / 100)
+  const newDueLeft = Math.max(0, estDueLeft - (includeOldDue ? est.oldDueAvailable : 0))
   const overLimit =
-    estDueLeft > 0 &&
+    newDueLeft > 0 &&
     (stats?.dueLimit ?? 0) > 0 &&
-    (stats?.totalDue ?? 0) + estDueLeft > (stats?.dueLimit ?? 0)
+    (stats?.totalDue ?? 0) + newDueLeft > (stats?.dueLimit ?? 0)
 
   const pickTeam = (t: Team) => {
+    setIncludeOldDue(false)
     setTeamPick((cur) => (cur === t ? null : t))
   }
   const togglePayer = (id: string) => {
+    setIncludeOldDue(false)
     if (split) {
       setSplit(false)
       setPayers([id])
@@ -1004,6 +1022,7 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
     setPayers((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]))
   }
   const toggleSplit = () => {
+    setIncludeOldDue(false)
     setSplit((current) => !current)
     setPayers([])
     setTeamPick(null)
@@ -1059,7 +1078,10 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
       toast: `Guest saved to Players · ${name}`,
     })
     setGuestSaving(false)
-    if (result) setEditingGuest(null)
+    if (result) {
+      setIncludeOldDue(false)
+      setEditingGuest(null)
+    }
   }
   const bumpQty = (itemId: string, delta: number) => {
     setQty((q) => {
@@ -1087,6 +1109,8 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
       paymentMode: autoMode,
       paidAmount: paidNum,
       split,
+      unitsPlayed: Math.max(1, Math.trunc(parseNum(unitsPlayed, 1))),
+      includeOldDue,
       usePass: autoMode === 'pass' ? est.passMemberIds : [],
     }
     if (is2v2 && !split) body.winningTeam = teamPick
@@ -1106,6 +1130,16 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
 
   const resume = async () => {
     await mutate(`sessions/${session.id}/resume`, { toast: `Session resumed · ${table.name}` })
+  }
+
+  const cancelSession = async () => {
+    setBusy(true)
+    const result = await mutate<{ ok: boolean }>(`sessions/${session.id}`, {
+      method: 'DELETE',
+      toast: `Session cancelled · ${table.name}`,
+    })
+    setBusy(false)
+    if (result) setCancelOpen(false)
   }
 
   const teamOf = (t: Team) => session.players.filter((p) => p.team === t)
@@ -1295,6 +1329,7 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
 
       {/* money controls */}
       <div className="bill-controls">
+        {session.billingMode && session.billingMode !== 'hourly' && session.billingMode !== 'flat' && <label className="field"><span className="field-label">{session.billingMode === 'per_frame' ? 'Frames played' : 'Games played'}</span><TextInput style={{height:'32px'}} inputMode="numeric" min="1" value={unitsPlayed} onChange={(e) => setUnitsPlayed(e.target.value)} /></label>}
         <label className="field">
           <span className="field-label">Discount</span>
           <TextInput style={{height:"32px"}} inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
@@ -1337,12 +1372,48 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
         <p className="small warn-text" role="status">{est.passMessage}</p>
       )}
 
+      {est.oldDueAvailable > 0 && (
+        <div className="old-due-choice">
+          <div>
+            <b>Old due · {formatCurrency(est.oldDueAvailable)}</b>
+            <div className="muted small">{includeOldDue ? 'Included for collection with this frame' : 'Kept separate from this frame'}</div>
+          </div>
+          <span className="club-switch-toggle">
+            <span className={`cs-label ${includeOldDue ? 'cs-open' : 'cs-closed'}`}>{includeOldDue ? 'ADD' : 'SKIP'}</span>
+            <button
+              type="button"
+              className={`switch${includeOldDue ? ' on' : ''}`}
+              role="switch"
+              aria-checked={includeOldDue}
+              aria-label="Include old due in this frame"
+              onClick={() => includeOldDue ? setIncludeOldDue(false) : setConfirmOldDueOpen(true)}
+            />
+          </span>
+        </div>
+      )}
+
+      <Modal
+        open={confirmOldDueOpen}
+        onClose={() => setConfirmOldDueOpen(false)}
+        title="Add old due to this frame?"
+        width={380}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={() => setConfirmOldDueOpen(false)}>Keep separate</Btn>
+            <Btn variant="green" onClick={() => { setIncludeOldDue(true); setConfirmOldDueOpen(false) }}>Add {formatCurrency(est.oldDueAvailable)}</Btn>
+          </>
+        }
+      >
+        <p className="small">Add {formatCurrency(est.oldDueAvailable)} of existing due from the selected payer{est.losingMembers.length === 1 ? '' : 's'} to this frame’s collection? If it is not paid now, it remains due.</p>
+      </Modal>
+
       {/* bill rows */}
       <div className="bill-rows">
         <div className="bill-row"><span>Table · {formatDuration(est.minutes)}</span><b>{formatCurrency(est.tableAmount)}</b></div>
         {est.itemsTotal > 0 && <div className="bill-row"><span>Items ({est.itemLines})</span><b>{formatCurrency(est.itemsTotal)}</b></div>}
         {est.gloveCharges > 0 && <div className="bill-row"><span>Gloves not returned ({est.gloveMissing})</span><b>+{formatCurrency(est.gloveCharges)}</b></div>}
         {est.bonus > 0 && <div className="bill-row"><span>Winner bonus</span><b>+{formatCurrency(est.bonus)}</b></div>}
+        {est.taxAmount > 0 && <div className="bill-row"><span>{settings?.taxLabel || 'Tax'} ({settings?.taxRate ?? 0}%)</span><b>+{formatCurrency(est.taxAmount)}</b></div>}
         {est.membershipDiscount > 0 && (
           <div className="bill-row neg"><span>Premium {est.membershipName ? `· ${est.membershipName} ` : ''}{est.membershipPct}%</span><b>-{formatCurrency(est.membershipDiscount)}</b></div>
         )}
@@ -1361,18 +1432,48 @@ function FinalBillCard({ table, session, onConfirmed }: { table: ClubTable; sess
 
       {overLimit && (
         <p className="small warn-text">
-          Due limit {formatCurrency(stats?.dueLimit)} will be exceeded (total due {formatCurrency((stats?.totalDue ?? 0) + estDueLeft)}).
+          Due limit {formatCurrency(stats?.dueLimit)} will be exceeded (total due {formatCurrency((stats?.totalDue ?? 0) + newDueLeft)}).
         </p>
       )}
 
       <div className="final-actions">
-        <Btn variant="ghost"  style={{ height: '32px' }} onClick={resume} title="Resume session">
-          <RotateCcw size={12} /> Resume
+        <Btn variant="ghost" className="final-action-icon" style={{ height: '32px' }} onClick={() => setNotesOpen(true)} title="Change session note" aria-label="Change session note">
+          <StickyNote size={16} />
         </Btn>
+        <Btn variant="ghost" className="final-action-icon" style={{ height: '32px' }} onClick={resume} title="Resume session" aria-label="Resume session">
+          <RotateCcw size={16} />
+        </Btn>
+        {(user?.role === 'owner' || user?.role === 'master') && (
+          <Btn variant="red" className="final-action-icon" style={{ height: '32px' }} onClick={() => setCancelOpen(true)} title="Cancel this session" aria-label="Cancel this session">
+            <Trash2 size={16} />
+          </Btn>
+        )}
         <Btn variant="green" style={{ height: '32px' , fontWeight: '600' }} className="btn-block" loading={busy} disabled={!validSides || (isPass && est.passMemberIds.length === 0)} onClick={confirm}>
           Confirm Bill · {formatCurrency(validSides ? est.total : 0)}
         </Btn>
       </div>
+
+      <Modal
+        open={cancelOpen}
+        onClose={() => { if (!busy) setCancelOpen(false) }}
+        title={`Cancel session · ${table.name}`}
+        width={380}
+        footer={
+          <>
+            <Btn variant="ghost" disabled={busy} onClick={() => setCancelOpen(false)}>Keep session</Btn>
+            <Btn variant="red" loading={busy} onClick={() => void cancelSession()}>
+              <Trash2 size={13} /> Cancel session
+            </Btn>
+          </>
+        }
+      >
+        <p className="small">This removes the stopped session without creating a bill. Attached items will be returned to stock.</p>
+        {advance > 0 && (
+          <p className="small warn-text">An advance of {formatCurrency(advance)} was already collected. Refund it manually after cancelling.</p>
+        )}
+      </Modal>
+
+      {notesOpen && <NoteModal session={session} table={table} onClose={() => setNotesOpen(false)} />}
     </Card>
   )
 }

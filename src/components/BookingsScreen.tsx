@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, RefreshCw, X } from 'lucide-react'
 import { api, ApiError, asArray, isRecord } from '../lib/api'
+import { formatTime12Hour } from '../lib/format'
 import { useClub } from '../context/ClubContext'
 import { useToast } from '../context/ToastContext'
 import { Badge, Btn, Card, ConfirmModal, EmptyState, Seg, StatCard } from './ui'
@@ -16,7 +17,7 @@ function labelOf(b: TableBooking): string {
 }
 
 function whenOf(b: TableBooking): string {
-  const slot = [b.startIST, b.endIST].filter(Boolean).join('–')
+  const slot = [b.startIST, b.endIST].map(formatTime12Hour).filter(Boolean).join('–')
   return [b.dateIST, slot].filter(Boolean).join(' · ')
 }
 

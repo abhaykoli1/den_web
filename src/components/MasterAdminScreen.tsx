@@ -74,7 +74,7 @@ function SellerPlanModal({ open, onClose, plan, onSaved }: {
     setBusy(true)
     const body = {
       name: form.name.trim(),
-      description: form.description || null,
+      description: form.description.trim(),
       price: parseNum(form.price),
       billingCycle: form.billingCycle,
       durationDays: Math.trunc(parseNum(form.durationDays, 30)) || 30,
@@ -215,7 +215,7 @@ function SubscriptionModal({ user, plans, onClose, onSaved }: {
             <option value="">Keep current / none</option>
             {plans.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} · {formatCurrency(p.price)}/{p.billingCycle === 'yearly' ? 'yr' : 'mo'} · {p.maxClubs} club{p.maxClubs > 1 ? 's' : ''}
+                {p.name} · {formatCurrency(p.price, '₹')}/{p.billingCycle === 'yearly' ? 'yr' : 'mo'} · {p.maxClubs} club{p.maxClubs > 1 ? 's' : ''}
               </option>
             ))}
           </Select>
@@ -371,7 +371,7 @@ export default function MasterAdminScreen() {
     try {
       const [ov, sp, mo, ct] = await Promise.all([
         api<Overview>('/master/overview'),
-        api<SaaSPlan[]>('/subscription-plans'),
+        api<SaaSPlan[]>('/master/subscription-plans'),
         api<Mailout[]>('/master/mailouts'),
         api<SupportContact>('/platform/support'),
       ])
@@ -473,12 +473,13 @@ export default function MasterAdminScreen() {
         </div>
       </div>
 
-      <div className="grid-stats five">
+      <div className="grid-stats six">
         <StatCard label="Accounts" tone="blue" value={`${stats?.activeUsers ?? 0}/${stats?.totalUsers ?? 0}`} sub="active / total" />
         <StatCard label="Total Clubs" tone="green" value={stats?.totalClubs ?? 0} sub="branches" />
         <StatCard label="Active Subscriptions" tone="gold" value={stats?.activeSubscriptions ?? 0} sub="trial + active" />
         <StatCard label="Platform MRR" tone="green" value={formatCurrency(stats?.monthlyRecurringRevenue ?? 0)} sub="monthly recurring" />
         <StatCard label="Seller Plans" tone="blue" value={plans.length} sub="active catalog" />
+        <StatCard label="Inactive Accounts" tone="red" value={overview?.users.filter((account) => account.role !== 'master' && account.active === false).length ?? 0} sub="access disabled" />
       </div>
 
       {/* ------------------------------------------------ login accounts */}
@@ -536,7 +537,7 @@ export default function MasterAdminScreen() {
                     </td>
                     <td className="nowrap muted">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}</td>
                     <td>
-                      <Btn size="sm" variant="blue" onClick={() => setUserModal(u)}>Manage</Btn>
+                      <Btn size="sm" variant="green" onClick={() => setUserModal(u)}>Manage</Btn>
                     </td>
                   </tr>
                 ))}
@@ -566,7 +567,7 @@ export default function MasterAdminScreen() {
                 {!p.active && <Badge kind="muted">inactive</Badge>}
               </span>
               <span className="muted small nowrap">
-                {formatCurrency(p.price)}/{p.billingCycle === 'yearly' ? 'yr' : 'mo'} · {p.durationDays}d · max {p.maxClubs} club{p.maxClubs > 1 ? 's' : ''}
+                {formatCurrency(p.price, '₹')}/{p.billingCycle === 'yearly' ? 'yr' : 'mo'} · {p.durationDays}d · max {p.maxClubs} club{p.maxClubs > 1 ? 's' : ''}
               </span>
               <button className="btn-icon" aria-label={`${p.active ? 'Deactivate' : 'Activate'} ${p.name}`} title={p.active ? 'Deactivate' : 'Activate'} onClick={() => togglePlan(p)}>
                 <Power size={12} className={p.active ? 'ok' : 'off'} />

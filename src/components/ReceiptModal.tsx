@@ -62,6 +62,7 @@ export function frameReceipt(f: FrameRecord, clubName: string): ReceiptData {
     rows.push({ label: `Gloves not returned${names ? ` · ${names}` : ''}`, value: `+${formatCurrency(asNum(fr.gloveCharges))}` })
   }
   if (asNum(fr.winnerBonus) > 0) rows.push({ label: 'Winner bonus', value: `+${formatCurrency(asNum(fr.winnerBonus))}` })
+  if (asNum(fr.taxAmount) > 0) rows.push({ label: `${fr.taxLabel || 'Tax'}${asNum(fr.taxRate) ? ` · ${asNum(fr.taxRate)}%` : ''}`, value: `+${formatCurrency(asNum(fr.taxAmount))}` })
   if (asNum(fr.membershipDiscount) > 0) {
     rows.push({ label: `Premium discount`, value: `-${formatCurrency(asNum(fr.membershipDiscount))}`, neg: true })
   }
@@ -74,17 +75,30 @@ export function frameReceipt(f: FrameRecord, clubName: string): ReceiptData {
   }
   if (asNum(fr.discount) > 0) rows.push({ label: 'Discount', value: `-${formatCurrency(asNum(fr.discount))}`, neg: true })
   if (asNum(fr.advancePaid) > 0) rows.push({ label: 'Advance (already received)', value: formatCurrency(asNum(fr.advancePaid)) })
+  const oldDueIncluded = Math.max(asNum(fr.oldDueIncludedAmount), asNum(fr.oldDueAmount))
+  const oldDuePaid = asNum(fr.oldDueAmount)
+  if (oldDueIncluded > 0) {
+    rows.push({ label: 'Old due included', value: formatCurrency(oldDueIncluded) })
+    if (oldDuePaid > 0 && oldDuePaid < oldDueIncluded) {
+      rows.push({ label: 'Old due collected', value: formatCurrency(oldDuePaid) })
+    }
+  }
 
-  const total = asNum(fr.frameAmount ?? fr.totalAmount)
+  const frameAmount = asNum(fr.frameAmount ?? fr.totalAmount)
+  const total = fr.frameAmount != null ? frameAmount + oldDueIncluded : asNum(fr.totalAmount)
   const dueLeft = settlements.reduce((s, l) => s + asNum(l?.duePart), 0)
-  const paidNow = asNum(fr.cashCollected) + asNum(fr.advanceUsed)
+    + Math.max(0, oldDueIncluded - oldDuePaid)
+  const paidNow = settlements.length
+    ? settlements.reduce((s, l) => s + asNum(l?.walletPart) + asNum(l?.passPart) + asNum(l?.cashPart) + asNum(l?.oldDuePart), 0)
+    : asNum(fr.cashCollected) + asNum(fr.advanceUsed)
   // payment mode label from settlement parts (wallet/pass/cash + due)
   const partModes = [...new Set(settlements.flatMap((l) => [
     asNum(l?.walletPart) > 0 ? 'wallet' : '',
     asNum(l?.passPart) > 0 ? 'pass' : '',
-    asNum(l?.cashPart) > 0 ? 'cash' : '',
+    asNum(l?.cashPart) > 0 || asNum(l?.oldDuePart) > 0 ? 'cash' : '',
     asNum(l?.duePart) > 0 ? 'due' : '',
   ]).filter(Boolean))]
+  if (oldDueIncluded > oldDuePaid && !partModes.includes('due')) partModes.push('due')
 
   return {
     kind: 'TABLE BILL',

@@ -24,7 +24,8 @@ server proxies `/api/*` to the FastAPI backend
 (`vite.config.ts` → `server.proxy`), so no CORS setup is needed locally.
 For production, point `VITE_API_URL` at the deployed backend
 (`https://your-api.vercel.app/api`) and add the web origin to backend
-`CORS_ORIGINS` + Google Authorized JavaScript Origins.
+`CORS_ORIGINS` + Google Authorized JavaScript Origins. Production Vite builds
+always hide the development sign-in form, even if the local dev flag is set.
 
 ## Environment (`.env.example`)
 
@@ -44,6 +45,11 @@ For production, point `VITE_API_URL` at the deployed backend
    plan-selection / pending-activation onboarding screen (HTTP 402 is enforced
    by the backend).
 5. `AUTH_DEV_MODE` shows a dev email login next to Google sign-in.
+
+Seller subscriptions are requested from the plan screen and manually approved
+by Master Admin. The public catalog includes monthly and annual Starter, Pro,
+and Business tiers. Pending requests have no billing access; a trial is granted
+once per account.
 
 ## Screens (routes)
 

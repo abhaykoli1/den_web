@@ -35,7 +35,9 @@ export { isRecord }
 export const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
 
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
-export const DEV_MODE = String(import.meta.env.VITE_AUTH_DEV_MODE).toLowerCase() === 'true'
+// A production bundle never exposes the development sign-in UI, even if a
+// deployment accidentally carries the local VITE_AUTH_DEV_MODE flag.
+export const DEV_MODE = !import.meta.env.PROD && String(import.meta.env.VITE_AUTH_DEV_MODE).toLowerCase() === 'true'
 
 interface ApiOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'

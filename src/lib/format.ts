@@ -2,11 +2,17 @@
 // FastAPI backend always computes the authoritative persisted result).
 import type { ClubTable, Member, TableRate } from '../types'
 
-export function formatCurrency(value: number | null | undefined, symbol = '₹'): string {
+let activeCurrencySymbol = '₹'
+export function setCurrencyDisplay(currency?: string, symbol?: string): void {
+  const defaults: Record<string, string> = { INR: '₹', USD: '$', GBP: '£', EUR: '€', AED: 'د.إ', SGD: 'S$', CAD: 'C$', AUD: 'A$' }
+  activeCurrencySymbol = symbol || defaults[currency || 'INR'] || '₹'
+}
+
+export function formatCurrency(value: number | null | undefined, symbol?: string): string {
   const n = Number(value ?? 0)
   const abs = Math.abs(n)
   const text = abs.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })
-  return `${n < 0 ? '-' : ''}${symbol}${text}`
+  return `${n < 0 ? '-' : ''}${symbol ?? activeCurrencySymbol}${text}`
 }
 
 export function formatNumber(value: number | null | undefined): string {
@@ -72,6 +78,18 @@ export function formatHourRange(start: number, end: number): string {
   const sameMer = s < 12 === e < 12
   if (sameMer) return `${formatHour(s).replace(/ (AM|PM)$/, '')}–${formatHour(e)}`
   return `${formatHour(s)} – ${formatHour(e)}`
+}
+
+/** Convert an HH:mm booking time to 12-hour clock, preserving unknown formats. */
+export function formatTime12Hour(value?: string | null): string {
+  if (!value) return ''
+  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(value.trim())
+  if (!match) return value
+  const hours = Number(match[1])
+  const minutes = match[2]
+  const meridiem = hours < 12 ? 'AM' : 'PM'
+  const hour12 = hours % 12 || 12
+  return `${hour12}:${minutes} ${meridiem}`
 }
 
 export function titleCase(s: string): string {

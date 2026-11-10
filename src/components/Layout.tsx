@@ -2,6 +2,7 @@ import { Fragment, Suspense, useEffect, useMemo, useRef, useState, type TouchEve
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Activity,
+  ArrowLeft,
   Beer,
   CalendarDays,
   Compass,
@@ -71,7 +72,7 @@ const NAV: NavEntry[] = [
     label: 'Dashboard',
     icon: LayoutDashboard,
     title: 'Admin Dashboard',
-    subtitle: 'Income, expenses, dues & reports — club ka poora hisaab ek page pe',
+    subtitle: 'Income, expenses, dues & reports ',
     adminOnly: true,
     section: 'Admin',
   },
@@ -92,12 +93,12 @@ const NAV: NavEntry[] = [
   { to: '/tables', label: 'Games', icon: Grid3x3, title: 'Games', subtitle: 'Live game billing · wallet & due auto-applied', section: 'Club' },
   { to: '/players', label: 'All Players', icon: Users, title: 'All Players', subtitle: 'Players, wallets, passes & dues' },
   { to: '/due-desk', label: 'Due Desk', icon: Wallet, title: 'Due Desk', subtitle: 'Manage player dues and payments' },
-  { to: '/tournaments', label: 'Tournaments', icon: Trophy, title: 'Tournaments', subtitle: 'Players & entry fees → knockout → match tables → champion' },
+  { to: '/tournaments', label: 'Tournaments', icon: Trophy, title: 'Tournaments', subtitle: 'Players entry→ knockout → match → champion' },
   { to: '/items', label: 'Item Billing', icon: ShoppingBag, title: 'Item Billing', subtitle: 'Counter sales — cafe, snacks & misc items', section: 'Records' },
   // ★ den_app Records hub ka Stock tab — item master, restock & reorder levels
-  { to: '/stock', label: 'Stock', icon: Package, title: 'Stock', subtitle: 'Item master, photos, restock (auto-expense) & reorder levels' },
+  { to: '/stock', label: 'Stock', icon: Package, title: 'Stock', subtitle: 'Item, restock (auto-expense) & reorder levels' },
   { to: '/item-bills', label: 'Item Bills', icon: Receipt, title: 'Item Bills', subtitle: 'Counter item bills · history, receipts & dues' },
-  { to: '/frames', label: 'Frames', icon: History, title: 'Frame Bills', subtitle: 'Frame billing & history · winner corrections re-bill automatically' },
+  { to: '/frames', label: 'Frames', icon: History, title: 'Frame Bills', subtitle: 'Winner corrections re-bill automatically' },
   { to: '/logs', label: 'Logs', icon: Activity, title: 'Activity Logs', subtitle: 'Billing, payments, warnings and admin actions' },
   { to: '/settings', label: 'Settings', icon: Settings, title: 'Settings', subtitle: 'Configure your club settings', section: 'General' },
   // Support + policy pages sit right under Settings.
@@ -117,8 +118,8 @@ const HIDDEN_PAGES: { to: string; title: string; subtitle: string }[] = [
   { to: '/settings/pricing', title: 'Game Pricing', subtitle: 'Configure game tables, rates and peak pricing' },
   { to: '/settings/plans', title: 'Membership Plans', subtitle: 'Manage wallet, frame pass and monthly plans' },
   { to: '/day-close', title: 'Day Close · daily accounts', subtitle: 'Close the day and reconcile accounts' },
-  { to: '/admin', title: 'Monthly Revenue Sheet', subtitle: 'Money received — frames, item bills, memberships, due collections' },
-  { to: '/finance', title: 'Finance · P&L & Balance', subtitle: 'How much came in, went out, and stayed — the month-end account' },
+  { to: '/admin', title: 'Monthly Revenue Sheet', subtitle: 'Money received — bills, memberships, collections' },
+  { to: '/finance', title: 'Finance · P&L & Balance', subtitle: 'How much came in, went out, and stayed ' },
   { to: '/expenses', title: 'Expenses', subtitle: 'Track and manage club expenses' },
   // /team ab sidebar NAV me hai (Admin block) — HIDDEN se hata diya.
 ]
@@ -249,15 +250,16 @@ export default function Layout() {
       {drawer && <div className="sidebar-backdrop" onClick={() => setDrawer(false)} />}
       <aside className={`sidebar${drawer ? ' open' : ''}`}>
         <div className="brand">
-          {club?.logo ? (
+          {/* {club?.logo ? (
             <img className="brand-logo" src={club.logo} alt={club.name} />
-          ) : (
+          ) : ( */}
             <span className="brand-mark" aria-hidden>
               <img src="/public/icons/logo.png" width="34" height="34" alt="Rowdy's Den" />
             </span>
-          )}
+          {/* )} */}
           <div className="brand-text">
-            <div className="brand-name">{club?.name || "Rowdy's Den"}</div>
+            <div className="brand-name">{"Rowdy's Den"}</div>
+            {/* club?.name ||  */}
             <div className="brand-sub">Club Billing</div>
           </div>
           <button className="btn-icon drawer-close" aria-label="Close menu" onClick={() => setDrawer(false)}>
@@ -389,7 +391,7 @@ export default function Layout() {
 
         <div className="side-credit">
           <span className="side-credit-badge">v{APP_VERSION}</span>
-          <span className="side-credit-text">Powered by <b>Rowdy's Den</b></span>
+          <span className="side-credit-text">Powered by <b>Pixelbit</b></span>
         </div>
       </aside>
 
@@ -471,13 +473,26 @@ export default function Layout() {
               {location.pathname !== '/home' && location.pathname !== '/account' && (
                 <>
                   <div className="page-title-row">
-                    <h1 className="page-title">{title}</h1>
+                    <div className="page-title-leading">
+                      <button
+                        className="btn title-back"
+                        aria-label="Go back"
+                        title="Go back"
+                        onClick={() => {
+                          if (window.history.state?.idx > 0) navigate(-1)
+                          else navigate('/home')
+                        }}
+                      >
+                        <ArrowLeft size={16} />
+                      </button>
+                      <div className="page-title-stack">
+                        <h1 className="page-title">{title}</h1>
+                        <p className="page-subtitle">{subtitle}</p>
+                      </div>
+                    </div>
                     <button className="btn title-refresh" aria-label="Refresh page data" title="Refresh data" onClick={doRefresh}>
                       <RefreshCw size={13} className={(isMasterRoute ? maRefreshing : refreshing) ? 'spin' : ''} />
                     </button>
-                  </div>
-                  <div className="page-subtitle-row">
-                    <p className="page-subtitle">{subtitle}</p>
                   </div>
                 </>
               )}
@@ -494,10 +509,11 @@ export default function Layout() {
         <nav className="mobile-bottom-nav" aria-label="Main navigation">
           {[
             { label: 'Home', to: '/home', icon: Home, matches: ['/home'] },
-            { label: 'Club', to: '/tables', icon: Beer, matches: ['/tables', '/players', '/due-desk', '/frames', '/tournaments'] },
-            { label: 'Help', to: '/support', icon: Headset, matches: ['/support'] },
+            { label: 'Club', to: '/tables', icon: Beer, matches: ['/tables', '/players', '/due-desk', '/frames'] },
             { label: 'Records', to: '/items', icon: Receipt, matches: ['/item-bills', '/items', '/stock', '/orders', '/logs'] },
             { label: 'Bookings', to: '/bookings', icon: CalendarDays, matches: ['/bookings'] },
+            // { label: 'Tournament', to: '/tournaments', icon: Trophy, matches: ['/tournaments'] },
+            { label: 'Help', to: '/support', icon: Headset, matches: ['/support'] },
           ].map(({ label, to, icon: Icon, matches }) => (
             <NavLink
               key={to}

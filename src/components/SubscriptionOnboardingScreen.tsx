@@ -17,6 +17,7 @@ export default function SubscriptionOnboardingScreen() {
   const [checking, setChecking] = useState(false)
 
   const sub = user?.subscription
+  const hasUsedTrial = Boolean(user?.trialUsedAt || sub?.trialUsedAt)
   const pending = sub && sub.status !== 'trial' && sub.status !== 'active'
 
   useEffect(() => {
@@ -28,8 +29,8 @@ export default function SubscriptionOnboardingScreen() {
   const select = async (plan: SaaSPlan) => {
     setSelecting(plan.id)
     try {
-      await api('/account/subscription/select', { method: 'POST', body: { planId: plan.id } })
-      if (plan.trialDays > 0) {
+      const result = await api<{ subscription?: { status?: string } }>('/account/subscription/select', { method: 'POST', body: { planId: plan.id } })
+      if (result.subscription?.status === 'trial') {
         toast.success(`Trial started · ${plan.name}`)
       } else {
         toast.info('Plan selected — awaiting Master Admin activation')
@@ -77,7 +78,7 @@ export default function SubscriptionOnboardingScreen() {
             </Btn>
           </div>
           {plans && plans.length > 0 && (
-            <p className="muted small">…or pick a different plan below (a trial starts immediately).</p>
+            <p className="muted small">…or pick another plan below. Paid plans remain locked until a Master Admin approves them.</p>
           )}
         </div>
       )}
@@ -94,7 +95,7 @@ export default function SubscriptionOnboardingScreen() {
             )}
             <div className="plan-name">{p.name}</div>
             <div className="plan-price">
-              {formatCurrency(p.price)}
+              {formatCurrency(p.price, '₹')}
               <span className="plan-cycle">/{p.billingCycle === 'yearly' ? 'year' : 'month'}</span>
             </div>
             {p.description && <p className="muted small">{p.description}</p>}
@@ -102,7 +103,7 @@ export default function SubscriptionOnboardingScreen() {
               <li>
                 <BadgeCheck size={12} /> {p.maxClubs} club{p.maxClubs > 1 ? 's' : ''}
               </li>
-              {p.trialDays > 0 && (
+              {p.trialDays > 0 && !hasUsedTrial && (
                 <li>
                   <Clock size={12} /> {p.trialDays}-day free trial
                 </li>
@@ -114,13 +115,13 @@ export default function SubscriptionOnboardingScreen() {
               ))}
             </ul>
             <Btn
-              variant={p.trialDays > 0 ? 'green' : 'blue'}
+              variant={p.trialDays > 0 && !hasUsedTrial ? 'green' : 'blue'}
               className="btn-block"
               loading={selecting === p.id}
               onClick={() => select(p)}
             >
               {selecting === p.id ? <Spinner size={12} /> : null}
-              {p.trialDays > 0 ? `Start ${p.trialDays}-day Trial` : 'Select Plan'}
+              {p.trialDays > 0 && !hasUsedTrial ? `Start ${p.trialDays}-day Trial` : 'Request Plan'}
             </Btn>
           </div>
         ))}

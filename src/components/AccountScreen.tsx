@@ -1,8 +1,12 @@
 import { Link } from 'react-router-dom'
 import {
   Activity,
+  Bell,
+  Building2,
   CalendarDays,
   ChevronRight,
+  CreditCard,
+  Gamepad2,
   Grid3x3,
   Headset,
   History,
@@ -14,6 +18,7 @@ import {
   ShoppingBag,
   Trophy,
   UserCog,
+  UserRound,
   Wallet,
   type LucideIcon,
 } from 'lucide-react'
@@ -47,8 +52,20 @@ const CLUB_LINKS: AccountLink[] = [
   { label: 'Frames', description: 'Frame billing and history', to: '/frames', icon: History },
 ]
 
+const SETTINGS_LINKS: AccountLink[] = [
+  { label: 'My Profile', description: 'Your name, phone number and location', to: '/settings/profile', icon: UserRound },
+  { label: 'Browser Notifications', description: 'Choose which alerts appear on this device', to: '/settings/notifications', icon: Bell },
+  { label: 'Club Settings', description: 'Club profile, payment QR and billing defaults', to: '/settings/club', icon: Building2 },
+  { label: 'Game Pricing', description: 'Game tables, rates and peak pricing', to: '/settings/pricing', icon: Gamepad2 },
+  { label: 'Membership Plans', description: 'Wallet, frame pass and monthly plans', to: '/settings/plans', icon: CreditCard },
+]
+
 const GENERAL_LINKS: AccountLink[] = [
   { label: 'Settings', description: 'Configure your club settings', to: '/settings', icon: Settings },
+  { label: 'Human Support', description: 'Contact support for help', to: '/support', icon: Headset },
+]
+
+const ADMIN_GENERAL_LINKS: AccountLink[] = [
   { label: 'Human Support', description: 'Contact support for help', to: '/support', icon: Headset },
 ]
 
@@ -61,15 +78,15 @@ function LinkGroup({ heading, links, tone = 'green' }: { heading: string; links:
   return (
     <section className="account-section">
       <h2 className="account-section-heading">{heading}</h2>
-      <div className={`account-link-group account-link-group-${tone}`}>
+      <div className={`settings-links${tone === 'gold' ? ' settings-links-gold' : ''}`}>
         {links.map(({ label, description, to, icon: Icon }) => (
-          <Link className="account-link" key={to} to={to}>
-            <span className="account-link-icon"><Icon size={21} /></span>
-            <span className="account-link-copy">
-              <span className="account-link-title">{label}</span>
-              <span className="account-link-description">{description}</span>
+          <Link className="settings-link-card" key={to} to={to}>
+            <span className="settings-link-icon"><Icon size={19} strokeWidth={2} aria-hidden="true" /></span>
+            <span className="settings-link-copy">
+              <b>{label}</b>
+              <span className="muted small">{description}</span>
             </span>
-            <ChevronRight className="account-link-chevron" size={19} />
+            <ChevronRight className="settings-link-chevron" size={19} aria-hidden="true" />
           </Link>
         ))}
       </div>
@@ -98,25 +115,27 @@ export default function AccountScreen() {
       {user.role === 'master' && (
         <section className="account-section">
           <h2 className="account-section-heading">PLATFORM</h2>
-          <div className="account-link-group account-link-group-gold">
-            <Link className="account-link" to="/master">
-              <span className="account-link-icon"><Shield size={21} /></span>
-              <span className="account-link-copy">
-                <span className="account-link-title">Master Admin</span>
-                <span className="account-link-description">Manage platform-wide administration</span>
+          <div className="settings-links settings-links-gold">
+            <Link className="settings-link-card" to="/master">
+              <span className="settings-link-icon"><Shield size={19} strokeWidth={2} aria-hidden="true" /></span>
+              <span className="settings-link-copy">
+                <b>Master Admin</b>
+                <span className="muted small">Manage platform-wide administration</span>
               </span>
-              <ChevronRight className="account-link-chevron" size={19} />
+              <ChevronRight className="settings-link-chevron" size={19} aria-hidden="true" />
             </Link>
           </div>
         </section>
       )}
+
+      {isAdmin && <LinkGroup heading="SETTINGS" links={SETTINGS_LINKS} />}
 
       {isAdmin ? (
         <LinkGroup heading="ADMIN" links={ADMIN_LINKS} />
       ) : (
         <LinkGroup heading={club?.name ? club.name.toUpperCase() : 'CLUB'} links={CLUB_LINKS} />
       )}
-      <LinkGroup heading="GENERAL" links={GENERAL_LINKS} />
+      <LinkGroup heading="GENERAL" links={isAdmin ? ADMIN_GENERAL_LINKS : GENERAL_LINKS} />
 
       <button className="account-signout" onClick={() => void logout()}>
         <LogOut size={17} /> Sign out

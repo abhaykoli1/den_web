@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Crown, Printer, Repeat } from 'lucide-react'
+import { Crown, Printer, Repeat, StickyNote, Trash2 } from 'lucide-react'
 import { useClub } from '../context/ClubContext'
 import { formatCurrency, titleCase } from '../lib/format'
-import { Badge, Btn, Card, EmptyState, Modal, StatCard, TextInput } from './ui'
+import { Badge, Btn, Card, ConfirmModal, EmptyState, Modal, StatCard, TextInput } from './ui'
 import ReceiptModal, { frameReceipt, type ReceiptData } from './ReceiptModal'
 import type { FrameRecord, Team } from '../types'
 
@@ -124,7 +124,10 @@ export default function FramesScreen() {
   const { data } = useClub()
   const [date, setDate] = useState(todayDateKey)
   const [winnerFrame, setWinnerFrame] = useState<FrameRecord | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<FrameRecord | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
+  const { mutate } = useClub()
 
   const frames = data?.frames ?? []
   const filtered = useMemo(
@@ -141,6 +144,20 @@ export default function FramesScreen() {
     }
     return t
   }, [filtered])
+
+  const deleteFrame = async () => {
+    if (!deleteTarget) return
+    setDeleteBusy(true)
+    try {
+      const result = await mutate(`frames/${deleteTarget.id}`, {
+        method: 'DELETE',
+        toast: 'Frame deleted · settlement reversed',
+      })
+      if (result) setDeleteTarget(null)
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   return (
     <div className="stack">
@@ -165,15 +182,25 @@ export default function FramesScreen() {
                   <span className="pc-name">{f.tableName}</span>
                   <div className="frame-card-badges">
                     <Badge  kind="blue">{f.matchMode === '2v2' ? '2V2' : 'SOLO'}</Badge>
-                    <Badge kind={f.status === 'paid' ? 'green' : f.status === 'partial' ? 'blue' : 'red'}>{titleCase(f.status).toUpperCase()}</Badge>
+                    <Badge kind={f.status === 'written_off' ? 'muted' : f.status === 'paid' ? 'green' : f.status === 'partial' ? 'blue' : 'red'}>{f.status === 'written_off' ? 'WRITTEN OFF' : titleCase(f.status).toUpperCase()}</Badge>
                   </div>
                 </div>
                 <span className="muted small">{frameDateTime(f.startedAt)} → {frameDateTime(f.endedAt)}</span>
               </div>
 
+              {f.notes?.trim() && (
+                <div className="frame-card-note">
+                  <StickyNote size={13} aria-hidden="true" />
+                  <span>{f.notes}</span>
+                </div>
+              )}
+
               <div className="frame-card-amounts">
                 <div className="bill-row total"><span>Frame total</span><b>{formatCurrency(f.totalAmount)}</b></div>
                 <div className="bill-row"><span>Collected now</span><b className="money-red">{formatCurrency(f.paidAmount)}</b></div>
+                {(f.writtenOffAmount ?? 0) > 0 && (
+                  <div className="bill-row"><span>Due written off</span><b>{formatCurrency(f.writtenOffAmount ?? 0)}</b></div>
+                )}
               </div>
 
               <div className="chip-row frame-players">
@@ -195,6 +222,9 @@ export default function FramesScreen() {
                 <Btn size="sm" variant="outline" className="frame-fix-winner" aria-label={`Fix winner for ${f.tableName}`} onClick={() => setWinnerFrame(f)}>
                   <Repeat size={11} /> Fix winner
                 </Btn>
+                <Btn size="sm" variant="red" className="frame-delete-action" aria-label={`Delete frame for ${f.tableName}`} onClick={() => setDeleteTarget(f)}>
+                  <Trash2 size={12} /> Delete
+                </Btn>
               </div>
             </Card>
           ))}
@@ -202,6 +232,15 @@ export default function FramesScreen() {
       )}
 
       {winnerFrame && <WinnerModal frame={winnerFrame} onClose={() => setWinnerFrame(null)} />}
+      <ConfirmModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void deleteFrame()}
+        busy={deleteBusy}
+        title="Delete this frame?"
+        confirmLabel="Delete frame"
+        message="This removes the frame and reverses its wallet, due, pass, and winner-bonus changes. Frames with collected cash/advance or written-off dues cannot be deleted; use the appropriate correction instead."
+      />
       <ReceiptModal open={!!receipt} onClose={() => setReceipt(null)} receipt={receipt} />
     </div>
   )
