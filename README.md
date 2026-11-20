@@ -1,7 +1,7 @@
 # Rowdy's Den — Club Billing (React Frontend)
 
 Production-style React + TypeScript frontend for the Rowdy's Den FastAPI
-backend (`../backend`). Plain CSS design system (dark-first), Context API
+backend (`../den_server`). Plain CSS design system (dark-first), Context API
 state, `fetch` REST client, React Router.
 
 ## Stack
@@ -12,11 +12,11 @@ Context API (Theme → Toast → Auth → Club)
 ## Quick start (connected to the backend)
 
 ```bash
-# terminal 1 — backend on :8000
-cd backend && pip install -r requirements.txt && cp .env.example .env && python run.py
+# terminal 1 — backend on :8000 (from den_web)
+cd ../den_server && pip install -r requirements.txt && python run.py
 
 # terminal 2 — frontend on :5173
-cd frontend && npm install && cp .env.example .env && npm run dev
+cd ../den_web && npm install && npm run dev
 ```
 
 Open http://localhost:5173. In dev, `VITE_API_URL=/api` and the Vite dev
@@ -88,7 +88,7 @@ members/phone, tables, items, bills — `?q=` deep links via `useSearchSeed`)
 cached, PROD-only registration, on-brand icons). Receipt printing: shared
 `ReceiptModal` (58mm thermal CSS, `body.do-print` + portal `#print-root`).
 
-## ✨ AI Smart Insights (everywhere)
+## ✨ Smart Insights (everywhere)
 
 `components/InsightsCard.tsx` is a rule-based coach rendered on **every
 operational screen** — Tables (compact strip: live tables + running estimate),

@@ -7,7 +7,6 @@ import { NavLink, useLocation } from 'react-router-dom'
 interface Tab {
   to: string
   label: string
-  adminOnly?: boolean
 }
 
 const CLUB_TABS: Tab[] = [

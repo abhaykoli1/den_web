@@ -395,6 +395,8 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
   const [winnerBonus, setWinnerBonus] = useState(String(club?.settings.winnerBonus ?? 0))
   const [dueLimit, setDueLimit] = useState(String(club?.settings.dueLimit ?? 500))
   const [defaultAdvance, setDefaultAdvance] = useState(String(club?.settings.defaultAdvance ?? 0))
+  const [bookingCancelCutoff, setBookingCancelCutoff] = useState(String(club?.settings.bookingCancelCutoffMinutes ?? 120))
+  const [bookingDeposit, setBookingDeposit] = useState(String(club?.settings.bookingDepositAmount ?? 0))
   const [monthlyPct, setMonthlyPct] = useState(String(club?.settings.monthlyTableDiscount ?? 0))
   const [currency, setCurrency] = useState(club?.settings.currency ?? 'INR')
   const [taxEnabled, setTaxEnabled] = useState(club?.settings.taxEnabled ?? false)
@@ -476,6 +478,8 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
         winnerBonus: parseNum(winnerBonus),
         dueLimit: parseNum(dueLimit),
         defaultAdvance: parseNum(defaultAdvance),
+        bookingCancelCutoffMinutes: parseNum(bookingCancelCutoff),
+        bookingDepositAmount: parseNum(bookingDeposit),
         monthlyTableDiscount: parseNum(monthlyPct),
         currency,
         taxEnabled,
@@ -624,6 +628,8 @@ export default function SettingsScreen({ section = 'home' }: { section?: Setting
             <Field label={`Winner bonus (${formatCurrency(0)})`}><TextInput inputMode="decimal" value={winnerBonus} onChange={(e) => setWinnerBonus(e.target.value)} /></Field>
             <Field label={`Due limit (${formatCurrency(0)})`}><TextInput inputMode="decimal" value={dueLimit} onChange={(e) => setDueLimit(e.target.value)} /></Field>
             <Field label={`Default advance (${formatCurrency(0)})`}><TextInput inputMode="decimal" value={defaultAdvance} onChange={(e) => setDefaultAdvance(e.target.value)} /></Field>
+            <Field label="Booking cancellation cutoff (minutes)"><TextInput inputMode="numeric" value={bookingCancelCutoff} onChange={(e) => setBookingCancelCutoff(e.target.value)} /></Field>
+            <Field label="Booking deposit (wallet, ₹)"><TextInput inputMode="decimal" value={bookingDeposit} onChange={(e) => setBookingDeposit(e.target.value)} /></Field>
             <Field label="Monthly fallback discount (%)"><TextInput inputMode="decimal" value={monthlyPct} onChange={(e) => setMonthlyPct(e.target.value)} /></Field>
             <Field label="Tax / GST"><Select value={taxEnabled ? 'on' : 'off'} onChange={(e) => setTaxEnabled(e.target.value === 'on')}><option value="off">Disabled</option><option value="on">Enabled</option></Select></Field>
             {taxEnabled && <><Field label="Tax label"><TextInput value={taxLabel} onChange={(e) => setTaxLabel(e.target.value)} placeholder="GST" /></Field><Field label="Tax rate (%)"><TextInput inputMode="decimal" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} /></Field><Field label="GSTIN (optional)"><TextInput value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} /></Field></>}

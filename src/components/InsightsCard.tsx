@@ -474,7 +474,6 @@ export default function InsightsCard({
 
   const limit = max ?? (compact ? 3 : 8)
   const visible = insights.slice(0, limit)
-  if (!visible.length) return null
 
   return (
     <Card className={`insights${compact ? ' compact' : ''}`}>
@@ -486,11 +485,15 @@ export default function InsightsCard({
         aria-label={`${expanded ? 'Collapse' : 'Expand'} ${title}`}
       >
         <span className="insights-label">
-          <Sparkles size={12} /> AI Insight <span className="insights-count">{visible.length}</span>
+          <Sparkles size={12} /> Smart Insights <span className="insights-count">{visible.length}</span>
         </span>
         {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
-      {expanded ? (
+      {expanded && visible.length === 0 ? (
+        <div className="insights-summary muted" role="status">
+          {data ? 'Abhi koi actionable insight nahi hai. Naya activity ya data aane par yahan dikhega.' : 'Club data load hote hi insights yahan dikhne lagenge.'}
+        </div>
+      ) : expanded ? (
         <div className="stack-xs insights-list">
           {visible.map((ins, i) => (
             <div key={i} className={`insight-row insight-${ins.tone}`}>
@@ -500,7 +503,7 @@ export default function InsightsCard({
           ))}
         </div>
       ) : (
-        <div className="insights-summary">{visible[0].text}</div>
+        <div className="insights-summary">{visible[0]?.text ?? (data ? 'Abhi koi actionable insight nahi hai.' : 'Club data load hote hi insights yahan dikhne lagenge.')}</div>
       )}
       {expanded && insights.length > visible.length && (
         <p className="muted small" style={{ marginTop: 4 }}>+{insights.length - visible.length} aur insights — Reports / Finance pe pura breakdown.</p>

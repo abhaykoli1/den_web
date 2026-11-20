@@ -23,6 +23,7 @@ import { useClub } from '../context/ClubContext'
 import { useToast } from '../context/ToastContext'
 import { formatCurrency } from '../lib/format'
 import { Card, StatCard } from './ui'
+import InsightsCard from './InsightsCard'
 
 type Tone = 'green' | 'blue' | 'red' | 'gold'
 
@@ -145,6 +146,8 @@ export default function HomeScreen() {
         <StatCard label="Active players" value={String(activePlayers)} tone="blue" sub="members active" />
         <StatCard label="Low stock items" value={String(lowStock)} tone="gold" sub="need restocking" />
       </div>
+
+      <InsightsCard compact scopes={['live', 'members', 'stock']} max={4} title="Today's insights" />
 
       <div className="section-head" style={{ marginTop: 6 }}>
         <div className="section-title">Quick actions</div>

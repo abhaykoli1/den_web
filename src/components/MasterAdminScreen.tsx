@@ -362,33 +362,51 @@ export default function MasterAdminScreen() {
   const [delBusy, setDelBusy] = useState(false)
 
   const [mails, setMails] = useState<Mailout[]>([])
+  const [mailoutsUnavailable, setMailoutsUnavailable] = useState(false)
   const [contactEmail, setContactEmail] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [contactBusy, setContactBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
-    try {
-      const [ov, sp, mo, ct] = await Promise.all([
-        api<Overview>('/master/overview'),
-        api<SaaSPlan[]>('/master/subscription-plans'),
-        api<Mailout[]>('/master/mailouts'),
-        api<SupportContact>('/platform/support'),
-      ])
-      setOverview(ov)
-      setPlans(asArray<SaaSPlan>(sp))
-      setMails(asArray<Mailout>(mo))
-      setContactEmail(ct?.email ?? '')
-      setContactPhone(ct?.phone ?? '')
-      // also include inactive seller plans for management: fetch via known ids is
-      // unnecessary — overview does not list plans, so keep the active list for
-      // assignment and manage active state from what we have.
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not load master data')
-    } finally {
-      setLoading(false)
-      window.dispatchEvent(new Event('rd:refresh-done'))
+    const results = await Promise.allSettled([
+      api<Overview>('/master/overview'),
+      api<SaaSPlan[]>('/master/subscription-plans'),
+      api<Mailout[]>('/master/mailouts'),
+      api<SupportContact>('/platform/support'),
+    ])
+
+    const failures: string[] = []
+    const [overviewResult, plansResult, mailoutsResult, supportResult] = results
+
+    if (overviewResult.status === 'fulfilled') setOverview(overviewResult.value)
+    else failures.push('overview')
+
+    if (plansResult.status === 'fulfilled') setPlans(asArray<SaaSPlan>(plansResult.value))
+    else failures.push('subscription plans')
+
+    if (mailoutsResult.status === 'fulfilled') {
+      setMails(asArray<Mailout>(mailoutsResult.value))
+      setMailoutsUnavailable(false)
+    } else {
+      setMailoutsUnavailable(true)
+      failures.push('email history')
     }
+
+    if (supportResult.status === 'fulfilled') {
+      setContactEmail(supportResult.value?.email ?? '')
+      setContactPhone(supportResult.value?.phone ?? '')
+    } else failures.push('support contact')
+
+    if (failures.length) {
+      toast.error(`Could not load ${failures.join(', ')}. Other Master data is still available.`)
+    }
+
+    // also include inactive seller plans for management: fetch via known ids is
+    // unnecessary — overview does not list plans, so keep the active list for
+    // assignment and manage active state from what we have.
+    setLoading(false)
+    window.dispatchEvent(new Event('rd:refresh-done'))
   }, [])
 
   useEffect(() => {
@@ -631,7 +649,9 @@ export default function MasterAdminScreen() {
           Every mail the system produced — subscription welcomes, member plan sales, balance notifies, expiry
           warnings. <b>sent</b> = actually delivered via SMTP; <b>recorded</b> = SMTP not configured yet (dev).
         </p>
-        {mails.length === 0 ? (
+        {mailoutsUnavailable ? (
+          <EmptyState title="Email history unavailable" hint="Database connection issue. Refresh after the server reconnects." />
+        ) : mails.length === 0 ? (
           <EmptyState title="No emails yet" hint="Mails appear the moment subscriptions or member plans are sold." />
         ) : (
           <div className="table-scroll">

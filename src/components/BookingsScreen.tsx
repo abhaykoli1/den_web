@@ -66,6 +66,20 @@ export default function BookingsScreen() {
     }
   }
 
+  const markNoShow = async (booking: TableBooking) => {
+    if (!club || !booking.id) return
+    setBusy(true)
+    try {
+      await api(`/clubs/${club.id}/bookings/${booking.id}/no-show`, { method: 'POST' })
+      toast.success('Booking marked no-show')
+      await load()
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Could not update booking')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const visible = useMemo(
     () => (filter === 'all' ? bookings : bookings.filter((b) => (b.status ?? 'upcoming') === 'upcoming')),
     [bookings, filter],
@@ -146,6 +160,8 @@ export default function BookingsScreen() {
                     >
                       <X size={14} />
                     </button>
+                  ) : status === 'completed' ? (
+                    <Btn size="sm" variant="outline" loading={busy} onClick={() => void markNoShow(b)}>No-show</Btn>
                   ) : (
                     <Badge kind="muted">{status}</Badge>
                   )}

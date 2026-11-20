@@ -9,7 +9,7 @@
     "lint": "eslint . --max-warnings 0",
     "test": "node --test",
     "preview": "vite preview",
-    "api": "cd ../backend && python3 run.py"
+    "api": "cd ../den_server && python3 run.py"
   },
   "dependencies": {
     "lucide-react": "^0.454.0",

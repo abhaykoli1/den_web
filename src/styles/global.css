@@ -426,7 +426,9 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px;
+  height: var(--header-height);
+  flex: 0 0 var(--header-height);
+  padding: 11px 12px;
   border-bottom: 1px solid var(--border);
 }
 .brand-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); }
@@ -2434,7 +2436,7 @@ option[style] { background: var(--bg-elevated); }
 
 /* ================================================================ v3.10
    Sidebar tab-list SCROLLS, never SQUISHES (owner's mobile: opening the
-   Admin dropdown compressed the tabs above — flex children shrink by
+   Sidebar navigation compressed the tabs above — flex children shrink by
    default when the list is taller than `.nav`). flex:none on the direct
    children makes the list overflow-scroll instead of compressing. */
 

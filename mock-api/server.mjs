@@ -1,7 +1,7 @@
 /**
  * DEV-ONLY mock of the Rowdy's Den FastAPI backend.
  * Lets you run / review the React app (design + flows) without the real
- * `../backend`. Start it with:  node mock-api/server.mjs   (port 8000)
+ * `../den_server`. Start it with:  node mock-api/server.mjs   (port 8000)
  * then run `npm run dev` — vite proxies /api → http://127.0.0.1:8000.
  * NOT part of the production app; delete it any time.
  */

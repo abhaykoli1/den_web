@@ -1,12 +1,11 @@
 // Guided walkthrough ("App Tour") — spotlight overlay that walks a new owner
-// through the whole product. Auto-launches once per device (localStorage),
-// replayable any time from the sidebar Tour button. Design: same tokens,
+// through the whole product. Available from the sidebar Tour button.
+// Design: same tokens,
 // same compact card language — no external tour library.
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { setItem } from '../lib/storage'
 
 interface TourStep {
   /** navigate here before showing the step (optional) */
@@ -35,7 +34,7 @@ const STEPS: TourStep[] = [
   {
     sel: '.nav',
     title: 'Everything in one menu',
-    body: 'Tables, Players, Due Desk, Item Billing, Tournaments, Frames & Logs. The Admin dropdown (reports, expenses, staff) stays tucked at the very bottom.',
+    body: 'Home, Bookings, Orders, Games, Players, Due Desk, Tournaments, Item Billing, Stock, Bills, Frames, Logs, Settings and support are available from the sidebar.',
   },
   {
     route: '/tables',
@@ -77,7 +76,7 @@ const STEPS: TourStep[] = [
   },
   {
     title: "You're all set ✅",
-    body: 'Start a table, sell a membership, bill an item — the books keep themselves. Day Close (Admin dropdown) at night matches your drawer in one click.',
+    body: 'Start a table, sell a membership, bill an item — the books keep themselves. Open the owner Dashboard to review reports, or use Day Close to reconcile the drawer.',
   },
 ]
 
@@ -98,7 +97,6 @@ export default function Walkthrough({ active, onClose }: { active: boolean; onCl
   const step = STEPS[i]
 
   const finish = useCallback(() => {
-    setItem('tourDone', '1')
     onClose()
   }, [onClose])
 

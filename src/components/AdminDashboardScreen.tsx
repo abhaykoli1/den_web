@@ -152,6 +152,7 @@ export function AdminDashboardScreen() {
   const [dc, setDc] = useState<Record<string, unknown> | null>(null)
   const [mon, setMon] = useState<Record<string, unknown> | null>(null)
   const [fin, setFin] = useState<Record<string, unknown> | null>(null)
+  const [eng, setEng] = useState<Record<string, unknown> | null>(null)
 
   const monthKey = new Date().toISOString().slice(0, 7)
 
@@ -160,14 +161,16 @@ export function AdminDashboardScreen() {
     setLoading(true)
     setError('')
     try {
-      const [d, m, f] = await Promise.all([
+      const [d, m, f, e] = await Promise.all([
         api<Record<string, unknown>>(`/clubs/${club.id}/reports/day-close`),
         api<Record<string, unknown>>(`/clubs/${club.id}/reports/monthly?month=${monthKey}`),
         api<Record<string, unknown>>(`/clubs/${club.id}/reports/finance?month=${monthKey}`),
+        api<Record<string, unknown>>(`/clubs/${club.id}/reports/engagement`),
       ])
       setDc(d)
       setMon(m)
       setFin(f)
+      setEng(e)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Reports load nahi hui — retry karo')
     } finally {
@@ -244,6 +247,16 @@ export function AdminDashboardScreen() {
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       <InsightsCard month={monthKey} report={mon as never} finance={fin as never} scopes={['finance', 'revenue', 'expenses']} />
+      <Card>
+        <div className="dashboard-card-heading">Member Growth &amp; Demand · this month</div>
+        <div className="muted small">Repeat visit = at least 2 frames · food attach = frames with counter items</div>
+        <div className="grid-stats" style={{ marginTop: 9 }}>
+          <StatCard label="Repeat members" value={`${asNum(eng?.repeatMembers)} / ${asNum(eng?.activeMembers)}`} tone="green" sub={`${asNum(eng?.repeatRatePercent)}% returned`} />
+          <StatCard label="Food attach" value={`${asNum(eng?.foodAttachPercent)}%`} tone="gold" sub={`${asNum(eng?.frames)} frames`} />
+          <StatCard label="Member cafe sales" value={formatCurrency(asNum(eng?.memberCafeSales))} tone="blue" sub="member app orders" />
+          <StatCard label="Booking demand" value={`${asNum(eng?.upcomingBookings)} upcoming`} tone="blue" sub={`${asNum(eng?.waitingList)} waiting`} />
+        </div>
+      </Card>
       {/* ---- top stat cards ---- */}
       <div className="grid-stats">
         <StatCard

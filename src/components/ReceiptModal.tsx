@@ -63,6 +63,7 @@ export function frameReceipt(f: FrameRecord, clubName: string): ReceiptData {
   }
   if (asNum(fr.winnerBonus) > 0) rows.push({ label: 'Winner bonus', value: `+${formatCurrency(asNum(fr.winnerBonus))}` })
   if (asNum(fr.taxAmount) > 0) rows.push({ label: `${fr.taxLabel || 'Tax'}${asNum(fr.taxRate) ? ` · ${asNum(fr.taxRate)}%` : ''}`, value: `+${formatCurrency(asNum(fr.taxAmount))}` })
+  if (asNum(fr.taxAmount) > 0) rows.push({ label: 'Taxable value', value: formatCurrency(asNum(fr.taxableAmount)) })
   if (asNum(fr.membershipDiscount) > 0) {
     rows.push({ label: `Premium discount`, value: `-${formatCurrency(asNum(fr.membershipDiscount))}`, neg: true })
   }
@@ -103,7 +104,7 @@ export function frameReceipt(f: FrameRecord, clubName: string): ReceiptData {
   return {
     kind: 'TABLE BILL',
     clubName,
-    billNo: String(fr.id ?? '').slice(0, 8).toUpperCase(),
+    billNo: String(fr.invoiceNo ?? fr.id ?? '').toUpperCase(),
     when: formatDateTime(fr.endedAt ?? fr.createdAt),
     party: fr.tableName ?? 'Table',
     partyNote:
@@ -115,7 +116,7 @@ export function frameReceipt(f: FrameRecord, clubName: string): ReceiptData {
     paid: formatCurrency(paidNow || total - dueLeft),
     due: dueLeft > 0 ? formatCurrency(dueLeft) : null,
     mode: partModes.join(' + ') || 'cash',
-    footer: dueLeft > 0 ? 'Due pending — baad me collect karein' : 'Payment complete — thank you!',
+    footer: [fr.clubGstin ? `GSTIN ${fr.clubGstin}` : '', dueLeft > 0 ? 'Due pending — baad me collect karein' : 'Payment complete — thank you!'].filter(Boolean).join(' · '),
   }
 }
 
@@ -136,7 +137,7 @@ export function itemBillReceipt(b: ItemBill, clubName: string): ReceiptData {
   return {
     kind: 'ITEM BILL',
     clubName,
-    billNo: String(bill.id ?? '').slice(0, 8).toUpperCase(),
+    billNo: String(bill.invoiceNo ?? bill.id ?? '').toUpperCase(),
     when: formatDateTime(bill.createdAt),
     party: bill.customerName ?? 'Customer',
     partyNote: bill.memberName ? `Member: ${bill.memberName}` : null,
@@ -146,7 +147,7 @@ export function itemBillReceipt(b: ItemBill, clubName: string): ReceiptData {
     paid: formatCurrency(isDue ? 0 : paidAmt || total),
     due: isDue ? formatCurrency(total) : null,
     mode: modeBadge(bill.mode ?? 'cash'),
-    footer: isDue ? 'Due hai — Due Desk se collect karein' : 'Payment complete — thank you!',
+    footer: [bill.clubGstin ? `GSTIN ${bill.clubGstin}` : '', isDue ? 'Due hai — Due Desk se collect karein' : 'Payment complete — thank you!'].filter(Boolean).join(' · '),
   }
 }
 

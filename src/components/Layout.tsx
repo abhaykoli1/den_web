@@ -43,7 +43,6 @@ import { useClub } from '../context/ClubContext'
 import { useTheme } from '../context/ThemeContext'
 import { formatCurrency, todayLabel } from '../lib/format'
 import { APP_VERSION } from '../lib/version'
-import { getItem } from '../lib/storage'
 import { Btn, Modal, TextInput, Spinner } from './ui'
 
 type NavEntry = {
@@ -189,14 +188,6 @@ export default function Layout() {
     if (currentIndex >= 0 && nextIndex >= 0 && nextIndex < routes.length) navigate(routes[nextIndex])
   }
 
-  // First visit on this device → auto-launch the walkthrough once.
-  useEffect(() => {
-    if (!user || !club || user.role === 'master') return
-    if (getItem('tourDone')) return
-    const t = window.setTimeout(() => setTour(true), 700)
-    return () => window.clearTimeout(t)
-  }, [user, club])
-
   const current = useMemo(() => {
     if (location.pathname.startsWith('/settings/')) {
       return HIDDEN_PAGES.find((p) => location.pathname.startsWith(p.to))
@@ -250,13 +241,9 @@ export default function Layout() {
       {drawer && <div className="sidebar-backdrop" onClick={() => setDrawer(false)} />}
       <aside className={`sidebar${drawer ? ' open' : ''}`}>
         <div className="brand">
-          {/* {club?.logo ? (
-            <img className="brand-logo" src={club.logo} alt={club.name} />
-          ) : ( */}
-            <span className="brand-mark" aria-hidden>
-              <img src="/public/icons/logo.png" width="34" height="34" alt="Rowdy's Den" />
-            </span>
-          {/* )} */}
+          <span className="brand-mark" aria-hidden>
+            <img src="/icons/logo.png" width="34" height="34" alt="Rowdy's Den" />
+          </span>
           <div className="brand-text">
             <div className="brand-name">{"Rowdy's Den"}</div>
             {/* club?.name ||  */}

@@ -90,6 +90,8 @@ export interface ClubSettings {
   gstin?: string
   /** Club open / closed for business (den_app: Club.isOpen). Absent = open. */
   isOpen?: boolean
+  bookingCancelCutoffMinutes?: number
+  bookingDepositAmount?: number
 }
 
 export interface Club {
@@ -248,6 +250,8 @@ export interface Settlement {
 
 export interface FrameRecord {
   id: string
+  invoiceNo?: string
+  clubGstin?: string
   clubId: string
   tableId: string
   tableName: string
@@ -339,6 +343,8 @@ export interface Expense {
 
 export interface ItemBill {
   id: string
+  invoiceNo?: string
+  clubGstin?: string
   clubId: string
   customerName: string
   memberId?: string | null
